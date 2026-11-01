@@ -1,0 +1,13 @@
+{
+  "name": "kakarot-cloud-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Encrypted relay and mailbox for the friends chat",
+  "main": "cloud_server.js",
+  "scripts": {
+    "start": "node cloud_server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
