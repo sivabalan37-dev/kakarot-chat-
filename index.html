@@ -102,6 +102,26 @@ header{flex:none;display:flex;align-items:center;gap:10px;padding:10px 10px 10px
   border-radius:99px;background:#1a2650;border:1px solid var(--line);font-size:13px;opacity:0;pointer-events:none;transition:.22s}
 #toast.show{opacity:1;transform:translate(-50%,0)}
 </style>
+<script>
+/* Startup watchdog: if the app script can't start in this browser, say why instead of freezing on the splash. */
+(function () {
+  var errs = [];
+  window.addEventListener('error', function (e) {
+    errs.push((e && e.message ? e.message : 'unknown error') + (e && e.lineno ? ' (line ' + e.lineno + ')' : ''));
+  });
+  setTimeout(function () {
+    var log = document.getElementById('bootLog');
+    if (!log || log.textContent) return;   // app started normally
+    var m = /Chrome\/(\d+)/.exec(navigator.userAgent || '');
+    var out = ['> APP SCRIPT DID NOT START'];
+    for (var i = 0; i < errs.length && i < 3; i++) out.push('> ' + errs[i]);
+    out.push('> secure page: ' + (window.isSecureContext ? 'yes' : 'no'));
+    out.push('> crypto: ' + (window.crypto && window.crypto.subtle ? 'yes' : 'no'));
+    out.push('> browser: ' + (m ? 'Chrome ' + m[1] : 'unknown'));
+    log.textContent = out.join('\n');
+  }, 3000);
+})();
+</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -113,6 +133,7 @@ header{flex:none;display:flex;align-items:center;gap:10px;padding:10px 10px 10px
   <div class="title">KAKAROT CHAT</div>
   <pre id="bootLog" aria-live="polite"></pre>
   <div class="hint">tap to skip</div>
+  <noscript><div class="hint" style="color:var(--red)">JavaScript is turned off in this browser. Kakarot Chat needs it.</div></noscript>
 </section>
 
 <section id="fatal" class="screen hidden">
@@ -127,8 +148,6 @@ header{flex:none;display:flex;align-items:center;gap:10px;padding:10px 10px 10px
     </div>
     <label for="inName">Callsign</label>
     <input id="inName" type="text" maxlength="24" placeholder="e.g. Kakarot" autocomplete="off" autocapitalize="words">
-    <label for="inUrl">Cloud server</label>
-    <input id="inUrl" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://your-server.onrender.com">
     <label for="inCode">Secret code</label>
     <div class="row2">
       <input id="inCode" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="shared with your friends only">
@@ -138,7 +157,7 @@ header{flex:none;display:flex;align-items:center;gap:10px;padding:10px 10px 10px
     <label class="chk"><input id="inKeep" type="checkbox" checked> Stay signed in on this device</label>
     <div id="setupErr" class="err" role="alert"></div>
     <button id="btnEnter" class="btn primary" type="submit">ENTER THE ROOM</button>
-    <p class="fine">🔒 Messages are locked on your phone with the secret code before they leave it. The server only holds scrambled data it can’t read. Everyone in the group needs the same server and the same code. Tap 🎲 for a strong one.</p>
+    <p class="fine">🔒 Messages are locked on your phone with the secret code before they leave it. The server only holds scrambled data it can’t read. Everyone in the group needs the same code. Tap 🎲 for a strong one.</p>
   </form>
 </section>
 
@@ -155,6 +174,7 @@ header{flex:none;display:flex;align-items:center;gap:10px;padding:10px 10px 10px
     <div id="roomFp" class="info"></div>
     <button id="mInvite" type="button">➕ Invite a friend</button>
     <button id="mSound" type="button">🔔 Sound: on</button>
+    <button id="mNotify" type="button">📲 Notifications: on</button>
     <button id="mWipe" type="button">🧹 Wipe server history</button>
     <button id="mLeave" type="button">🚪 Leave this room</button>
   </div>
@@ -192,6 +212,8 @@ const store = {
 };
 const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+// Your cloud server. It is fixed: the app always uses this address (change it here if you ever move the server).
+const SERVER_URL = 'https://kakarot-chat-1.onrender.com';
 
 const S = {
   gen: 0, cfg: null, dev: '', roomId: '', roomKey: '', key: null, api: null,
@@ -397,7 +419,7 @@ async function onEvent(ev, d) {
     persist();
     render();
     const r = S.msgs.get(d.cid);
-    if (isNew && r && !r.mine) notify();
+    if (isNew && r && !r.mine) notify(r);
   }
 }
 
@@ -462,8 +484,39 @@ function beep() {
     o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.18);
   } catch (_) {}
 }
-function notify() {
-  if (document.hidden) { S.unread++; document.title = '(' + S.unread + ') Kakarot Chat'; return; }
+/* ================= system notifications ================= */
+const LN = () => window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+const canNotify = () => !!(LN() || ('Notification' in window));
+const notifyAllowed = () => !!(LN() || ('Notification' in window && Notification.permission === 'granted'));
+async function askNotif() {   // call from a tap: asks permission and, in a browser, sets up sw.js
+  try {
+    if (LN()) { await LN().requestPermissions(); return; }
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
+    }
+  } catch (_) {}
+}
+async function sysNotify(title, body) {
+  try {
+    if (LN()) { await LN().schedule({ notifications: [{ id: Date.now() % 2000000000, title, body }] }); return; }
+    if (!notifyAllowed()) return;
+    let reg = null;
+    if ('serviceWorker' in navigator) { try { reg = await navigator.serviceWorker.getRegistration(); } catch (_) {} }
+    if (reg && reg.active) { await reg.showNotification(title, { body, tag: 'kk-msg', renotify: true, vibrate: [90, 40, 90] }); return; }
+    new Notification(title, { body, tag: 'kk-msg' });
+  } catch (_) {}
+}
+function paintNotify() { $('mNotify').textContent = store.get('kk_ntf', true) && notifyAllowed() ? '📲 Notifications: on' : '📵 Notifications: off'; }
+
+function notify(r) {
+  if (document.hidden) {
+    S.unread++; document.title = '(' + S.unread + ') Kakarot Chat';
+    if (r && !r.bad && store.get('kk_ntf', true)) sysNotify(r.n || 'Kakarot Chat', String(r.t || 'New message').slice(0, 90));
+    return;
+  }
   if (store.get('kk_snd', true)) beep();
   try { if (navigator.vibrate) navigator.vibrate(25); } catch (_) {}
 }
@@ -556,6 +609,7 @@ function paintSound() { $('mSound').textContent = store.get('kk_snd', true) ? '�
 
 /* ================= session ================= */
 async function enterRoom(cfg) {
+  cfg.url = SERVER_URL;   // the server is fixed in this app
   const gen = ++S.gen;
   if (S.ctrl) S.ctrl.abort();
   if (S.wake) S.wake();
@@ -567,7 +621,7 @@ async function enterRoom(cfg) {
   if (cfg.remember) store.set('kk_cfg', cfg); else store.del('kk_cfg');
   $('roomFp').textContent = 'ROOM LINK ' + k.roomId.slice(0, 4).toUpperCase() + '-' + k.roomId.slice(4, 8).toUpperCase() + ' · friends must match';
   $('menu').classList.add('hidden');
-  paintSound();
+  paintSound(); paintNotify();
   showScreen('chat');
   paintHeader();
   await loadCache();
@@ -589,13 +643,10 @@ function clearLocalChat() {
   render(true);
 }
 
-function defaultUrl() { return !isNative && /^https?:$/.test(location.protocol) ? location.origin : ''; }
-
 function showSetup(pre) {
   pre = pre || {};
   const saved = store.get('kk_last', {});
   $('inName').value = pre.name || saved.name || '';
-  $('inUrl').value = pre.url || saved.url || defaultUrl();
   $('inCode').value = pre.code || '';
   $('inCode').type = 'password';
   $('setupErr').textContent = '';
@@ -615,15 +666,16 @@ $('setupForm').addEventListener('submit', async (e) => {
   unlockAudio();
   const err = (m) => { $('setupErr').textContent = m; };
   const name = $('inName').value.trim().replace(/\s+/g, ' ').slice(0, 24);
-  const url = normUrl($('inUrl').value);
+  const url = normUrl(SERVER_URL);
   const code = $('inCode').value;
   if (!name) return err('Pick a callsign so your friends know it’s you.');
-  if (!url) return err('Enter your cloud server address, like https://your-server.onrender.com');
+  if (!url) return err('No server address is set in this app.');
   if (isNative && !/^https:/i.test(url)) return err('The Android app needs an https:// server address.');
   if (normCode(code).length < 8) return err('That secret code is too short. Tap 🎲 to make a strong one.');
   err('');
   $('btnEnter').disabled = true; $('btnEnter').textContent = 'CALIBRATING…';
-  store.set('kk_last', { name, url });
+  store.set('kk_last', { name });
+  if (store.get('kk_ntf', true)) askNotif();
   try {
     await enterRoom({ name, url, code, remember: $('inKeep').checked });
   } catch (ex) {
@@ -637,8 +689,8 @@ $('btnGen').addEventListener('click', () => { $('inCode').value = genCode(); $('
 document.addEventListener('paste', (e) => {
   if ($('setup').classList.contains('hidden')) return;
   const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
-  const u = /Server:\s*(\S+)/i.exec(t), c = /Secret code:\s*([A-Za-z0-9-]+)/i.exec(t);
-  if (u && c) { e.preventDefault(); $('inUrl').value = u[1]; $('inCode').value = c[1]; toast('Invite pasted'); }
+  const c = /Secret code:\s*([A-Za-z0-9-]+)/i.exec(t);
+  if (c) { e.preventDefault(); $('inCode').value = c[1]; toast('Invite pasted'); }
 });
 
 /* composer */
@@ -672,6 +724,15 @@ $('mSound').addEventListener('click', () => {
   const v = !store.get('kk_snd', true);
   store.set('kk_snd', v); paintSound(); closeMenu(); toast(v ? 'Sound on' : 'Sound off');
 });
+$('mNotify').addEventListener('click', async () => {
+  closeMenu();
+  if (!canNotify()) { toast('This browser can’t show notifications'); return; }
+  if (store.get('kk_ntf', true) && notifyAllowed()) { store.set('kk_ntf', false); paintNotify(); toast('Notifications off'); return; }
+  store.set('kk_ntf', true);
+  await askNotif();
+  paintNotify();
+  toast(notifyAllowed() ? 'Notifications on' : 'Notifications are blocked. Allow them in your browser’s site settings.');
+});
 $('mWipe').addEventListener('click', async () => {
   closeMenu();
   if (!(await ask('Wipe server history?', 'This deletes every stored message from the cloud server and from this device. Friends keep their own copies until they clear them.', 'Wipe'))) return;
@@ -683,7 +744,7 @@ $('mWipe').addEventListener('click', async () => {
 });
 $('mLeave').addEventListener('click', async () => {
   closeMenu();
-  if (!(await ask('Leave this room?', 'Come back any time with the same server and secret code. Chat copies stay on this device unless you wipe them.', 'Leave'))) return;
+  if (!(await ask('Leave this room?', 'Come back any time with the same secret code. Chat copies stay on this device unless you wipe them.', 'Leave'))) return;
   stopSession(); store.del('kk_cfg');
   showSetup();
 });
@@ -696,7 +757,6 @@ function route() {
   try {
     const h = new URLSearchParams(location.hash.replace(/^#/, ''));
     if (h.get('code')) pre.code = h.get('code');
-    if (h.get('url')) pre.url = h.get('url');
     if (location.hash) history.replaceState(null, '', location.pathname + location.search);
   } catch (_) {}
   const cfg = store.get('kk_cfg', null);

@@ -1,148 +1,72 @@
-# build_apk.yml  ->  save it in your repo as  .github/workflows/build_apk.yml
-#
-# Turns index.html (your chat app) into an Android APK, in the cloud.
-# Run it:  GitHub > Actions > "Build Android APK" > Run workflow.
-# The APK shows up under Releases (and under the run's Artifacts).
-# It also runs by itself whenever you change index.html on the main branch.
-
 name: Build Android APK
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [index.html, .github/workflows/build_apk.yml]
-
-permissions:
-  contents: write
-
-env:
-  APP_NAME: Kakarot Chat
-  APP_ID: com.kakarot.friendschat
+    paths:
+      - index.html
+      - assets/**
+      - icon-*.png
+      - .github/workflows/build_apk.yml
 
 jobs:
   apk:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-
-      # Android only lets a new APK update an installed one when both use the same
-      # signing key. Caching the debug key keeps new builds installable over old ones.
-      # (If you do not build for a week the cache can expire; then uninstall the old app first.)
-      - uses: actions/cache@v5
-        with:
-          path: ~/.android/debug.keystore
-          key: debug-keystore-v1
-
-      - name: Make sure the Android SDK platform is present
-        continue-on-error: true
-        run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-34" "build-tools;34.0.0"
+          java-version: 21
 
       - name: Create the Android project
         run: |
-          [ -f index.html ] || { echo "index.html not found - add your chat app's HTML file to the repo root"; exit 1; }
-          mkdir -p apk_build/www
-          cp index.html apk_build/www/index.html
-          cd apk_build
-          npm init -y > /dev/null
-          npm install --no-audit --no-fund @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
-          npx cap telemetry off
-          cat > capacitor.config.json <<EOF
-          {
-            "appId": "$APP_ID",
-            "appName": "$APP_NAME",
-            "webDir": "www",
-            "server": { "androidScheme": "https" }
-          }
-          EOF
+          mkdir capapp
+          cd capapp
+          npm init -y
+          npm i @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/local-notifications@7
+          npm i -D @capacitor/assets
+          mkdir www
+          cp ../index.html www/index.html
+          npx cap init "Kakarot Chat" com.kakarot.chat --web-dir www
           npx cap add android
-          # camera + mic for calls and voicemail (WebRTC needs these declared)
-          python3 - <<'PY'
-          p = 'android/app/src/main/AndroidManifest.xml'
-          s = open(p).read()
-          extra = '''
-              <uses-permission android:name="android.permission.CAMERA" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <uses-feature android:name="android.hardware.camera" android:required="false" />
-              <uses-feature android:name="android.hardware.microphone" android:required="false" />
-          '''
-          open(p, 'w').write(s.replace('</manifest>', extra + '</manifest>'))
-          PY
 
-      - name: Brand the app (dark bars + orb icon)
-        continue-on-error: true
-        working-directory: apk_build
+      - name: Dragon Ball app icon
+        working-directory: capapp
         run: |
-          RES=android/app/src/main/res
-          mkdir -p $RES/drawable $RES/mipmap-anydpi-v26 $RES/values
-          cat > $RES/values/kk_colors.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="kk_bg">#05070F</color>
-          </resources>
-          XML
-          cat > $RES/drawable/kk_orb.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path android:fillColor="#E8590C" android:pathData="M27,54 a27,27 0 1,0 54,0 a27,27 0 1,0 -54,0 Z"/>
-              <path android:fillColor="#FF9A2E" android:pathData="M29.5,52.5 a24.5,24.5 0 1,0 49,0 a24.5,24.5 0 1,0 -49,0 Z"/>
-              <path android:fillColor="#FFD98A" android:pathData="M37,43 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0 Z"/>
-              <path android:fillColor="#C1121F" android:pathData="M54,37.3 L55.23,40.8 L58.95,40.89 L56,43.15 L57.06,46.71 L54,44.6 L50.94,46.71 L52,43.15 L49.05,40.89 L52.77,40.8Z M42.5,48.8 L43.73,52.3 L47.45,52.39 L44.5,54.65 L45.56,58.21 L42.5,56.1 L39.44,58.21 L40.5,54.65 L37.55,52.39 L41.27,52.3Z M65.5,48.8 L66.73,52.3 L70.45,52.39 L67.5,54.65 L68.56,58.21 L65.5,56.1 L62.44,58.21 L63.5,54.65 L60.55,52.39 L64.27,52.3Z M54,60.3 L55.23,63.8 L58.95,63.89 L56,66.15 L57.06,69.71 L54,67.6 L50.94,69.71 L52,66.15 L49.05,63.89 L52.77,63.8Z"/>
-          </vector>
-          XML
-          for f in ic_launcher ic_launcher_round; do
-            cat > $RES/mipmap-anydpi-v26/$f.xml <<'XML'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-              <background android:drawable="@color/kk_bg"/>
-              <foreground android:drawable="@drawable/kk_orb"/>
-          </adaptive-icon>
-          XML
+          mkdir -p assets
+          for f in icon-only icon-foreground icon-background; do
+            if [ -f "../assets/$f.png" ]; then cp "../assets/$f.png" assets/
+            elif [ -f "../$f.png" ]; then cp "../$f.png" assets/
+            fi
           done
-          # status bar + navigation bar match the app
-          STY=$RES/values/styles.xml
-          if [ -f "$STY" ]; then
-            sed -i 's#<item name="android:background">@null</item>#&\n        <item name="android:statusBarColor">@color/kk_bg</item>\n        <item name="android:navigationBarColor">@color/kk_bg</item>#' "$STY"
+          if [ -f assets/icon-only.png ]; then
+            npx capacitor-assets generate --android
+          else
+            echo "No icon files found, keeping the default icon"
           fi
 
-      - name: Build the APK
-        working-directory: apk_build/android
+      - name: Allow notifications on Android 13+
+        working-directory: capapp
         run: |
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q POST_NOTIFICATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' "$M"
+
+      - name: Build the APK
+        working-directory: capapp
+        run: |
+          npx cap sync android
+          cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/kakarot_chat.apk"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
           name: kakarot-chat-apk
-          path: kakarot_chat.apk
-
-      # A release is easier to download on a phone than a zipped artifact.
-      - name: Publish a release
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "apk-${{ github.run_number }}" kakarot_chat.apk \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "APK build ${{ github.run_number }}" \
-            --notes "Open this on your Android phone, download kakarot_chat.apk, tap it and allow the install."
+          path: capapp/android/app/build/outputs/apk/debug/app-debug.apk
