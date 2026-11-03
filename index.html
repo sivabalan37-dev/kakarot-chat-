@@ -1,788 +1,215 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#05070f">
-<meta name="color-scheme" content="dark">
-<meta name="referrer" content="no-referrer">
-<title>Kakarot Chat</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23ff8a1f'/%3E%3C/svg%3E">
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e1a"><title>Kakarot Chat</title>
 <style>
-:root{
-  --bg:#05070f;--panel:#0b1020;--panel2:#11182e;--line:#1d2a4d;
-  --orange:#ff8a1f;--orange2:#ffb347;--blue:#2aa8ff;--blue2:#7fd3ff;
-  --green:#3dff8a;--red:#ff4d5e;--txt:#e8edff;--mut:#8a97c2;
-}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--txt);overflow:hidden}
-body{font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Noto Sans Tamil",sans-serif;overscroll-behavior:none}
-button{font:inherit;color:inherit;cursor:pointer}
-.hidden{display:none!important}
-.screen{position:fixed;left:0;right:0;top:0;height:100%;height:100dvh;display:flex;flex-direction:column;
-  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
-.center{align-items:center;justify-content:center;text-align:center}
-.title{font-weight:800;letter-spacing:.2em;color:var(--orange2);text-shadow:0 0 14px rgba(255,138,31,.55)}
-.sub{font-size:11px;letter-spacing:.12em;color:var(--mut);text-transform:uppercase}
-
-/* boot */
-#boot{background:radial-gradient(120% 80% at 50% 18%,#1b2656 0%,var(--bg) 62%);padding:24px}
-.orb{filter:drop-shadow(0 0 16px rgba(255,138,31,.75));animation:pulse 2.4s ease-in-out infinite}
-@keyframes pulse{50%{filter:drop-shadow(0 0 32px rgba(255,190,80,.95));transform:scale(1.05)}}
-#boot .title{font-size:22px;margin-top:14px}
-#bootLog{font:13px/1.75 ui-monospace,Menlo,Consolas,monospace;color:var(--green);text-align:left;margin:18px 0 0;min-height:9em;white-space:pre-wrap}
-#bootLog::after{content:"\2588";animation:blink 1s steps(1) infinite}
-@keyframes blink{50%{opacity:0}}
-.hint{color:var(--mut);font-size:12px;margin-top:10px}
-
-/* cards + forms */
-#setup,#fatal{overflow-y:auto;background:radial-gradient(120% 70% at 50% 0%,#14204a 0%,var(--bg) 60%)}
-.card{width:min(440px,calc(100% - 28px));margin:auto;padding:20px 18px;border-radius:18px;border:1px solid var(--line);
-  background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:0 0 0 1px rgba(255,138,31,.07),0 20px 60px rgba(0,0,0,.55)}
-.brand{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.brand .title{font-size:18px}
-label{display:block;margin:14px 0 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
-input[type=text],input[type=password],textarea{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);
-  background:#070b18;color:var(--txt);font:inherit;outline:none}
-#inCode{font:14px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.02em}
-input:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(42,168,255,.18)}
-.row2{display:flex;gap:8px}
-.ico{flex:none;width:46px;height:46px;border-radius:12px;border:1px solid var(--line);background:#0d1530;font-size:18px;line-height:1}
-.chk{display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:14px;color:var(--txt);margin-top:14px}
-.chk input{width:18px;height:18px;accent-color:var(--orange)}
-.err{min-height:20px;margin:10px 0 0;color:var(--red);font-size:13px}
-.btn{width:100%;padding:13px 16px;border-radius:12px;border:1px solid var(--line);background:#0d1530;font-weight:700;letter-spacing:.08em}
-.btn.primary{border:0;color:#1a0d00;background:linear-gradient(180deg,var(--orange2),var(--orange));box-shadow:0 0 22px rgba(255,138,31,.35)}
-.btn:disabled{opacity:.6}
-.fine{margin:14px 0 0;font-size:12px;line-height:1.5;color:var(--mut)}
-
-/* chat */
-#chat{background:var(--bg)}
-header{flex:none;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;background:linear-gradient(180deg,#101a3a,var(--panel));border-bottom:1px solid var(--line)}
-.hd{flex:1;min-width:0}
-.hd .title{font-size:14px}
-.status{display:flex;align-items:center;gap:6px;font:11px/1.3 ui-monospace,Menlo,Consolas,monospace;color:var(--mut);white-space:nowrap}
-.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--orange)}
-.dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
-.dot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
-.dot.wait{background:var(--orange);box-shadow:0 0 8px var(--orange)}
-#stTxt{color:var(--txt)}
-.menu .info{padding:11px 16px;border-bottom:1px solid var(--line);font:11px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--blue2)}
-.menu{position:absolute;right:10px;top:calc(env(safe-area-inset-top,0px) + 56px);z-index:20;min-width:230px;overflow:hidden;
-  background:var(--panel2);border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,.65)}
-.menu button{display:block;width:100%;padding:13px 16px;text-align:left;border:0;border-bottom:1px solid var(--line);background:none}
-.menu button:last-child{border-bottom:0}
-.menu button:active{background:#1a2650}
-#list{flex:1;min-height:0;overflow-y:auto;padding:10px 12px 6px;display:flex;flex-direction:column;gap:4px;overscroll-behavior:contain}
-.sys{align-self:center;max-width:90%;text-align:center;font-size:11px;color:var(--mut);padding:4px 10px;margin-bottom:4px}
-.day{align-self:center;margin:10px 0 6px;padding:3px 11px;border-radius:99px;background:rgba(255,255,255,.05);font-size:10px;letter-spacing:.12em;color:var(--mut)}
-.empty{margin:auto;text-align:center;color:var(--mut);max-width:80%}
-.empty .big{font-size:42px;margin-bottom:6px}
-.row{display:flex}
-.row.mine{justify-content:flex-end}
-.bub{max-width:82%;padding:8px 11px 5px;border-radius:16px;word-break:break-word}
-.them .bub{background:linear-gradient(180deg,#15325f,#0f2448);border:1px solid #1f4c88;border-bottom-left-radius:5px}
-.mine .bub{color:#1d0e00;background:linear-gradient(180deg,#ffa23a,#f0700f);border-bottom-right-radius:5px;box-shadow:0 0 18px rgba(255,138,31,.22)}
-.bub.bad{opacity:.55;font-style:italic}
-.who{margin-bottom:2px;font-size:12px;font-weight:700;color:var(--blue2)}
-.txt{white-space:pre-wrap}
-.meta{display:flex;justify-content:flex-end;gap:5px;margin-top:2px;font-size:10px;opacity:.7}
-#composer{flex:none;display:flex;align-items:flex-end;gap:8px;padding:8px 10px;background:var(--panel);border-top:1px solid var(--line)}
-#msgBox{flex:1;min-height:46px;max-height:120px;padding:12px 15px;border-radius:23px;resize:none;line-height:1.3}
-.send{flex:none;width:46px;height:46px;border-radius:50%;border:0;font-size:19px;color:#1a0d00;
-  background:linear-gradient(180deg,var(--orange2),var(--orange));box-shadow:0 0 16px rgba(255,138,31,.45)}
-
-/* modal + toast */
-.modal{position:fixed;left:0;right:0;top:0;bottom:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(2,4,10,.72)}
-.modal .box{width:min(380px,100%);padding:20px;border-radius:16px;border:1px solid var(--line);background:var(--panel2)}
-.modal h3{margin:0 0 8px;color:var(--orange2)}
-.modal p{margin:0 0 16px;color:var(--txt);font-size:14px;line-height:1.5}
-.acts{display:flex;gap:10px}
-#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);z-index:60;transform:translate(-50%,20px);max-width:86%;padding:10px 16px;
-  border-radius:99px;background:#1a2650;border:1px solid var(--line);font-size:13px;opacity:0;pointer-events:none;transition:.22s}
-#toast.show{opacity:1;transform:translate(-50%,0)}
-</style>
-<script>
-/* Startup watchdog: if the app script can't start in this browser, say why instead of freezing on the splash. */
-(function () {
-  var errs = [];
-  window.addEventListener('error', function (e) {
-    errs.push((e && e.message ? e.message : 'unknown error') + (e && e.lineno ? ' (line ' + e.lineno + ')' : ''));
-  });
-  setTimeout(function () {
-    var log = document.getElementById('bootLog');
-    if (!log || log.textContent) return;   // app started normally
-    var m = /Chrome\/(\d+)/.exec(navigator.userAgent || '');
-    var out = ['> APP SCRIPT DID NOT START'];
-    for (var i = 0; i < errs.length && i < 3; i++) out.push('> ' + errs[i]);
-    out.push('> secure page: ' + (window.isSecureContext ? 'yes' : 'no'));
-    out.push('> crypto: ' + (window.crypto && window.crypto.subtle ? 'yes' : 'no'));
-    out.push('> browser: ' + (m ? 'Chrome ' + m[1] : 'unknown'));
-    log.textContent = out.join('\n');
-  }, 3000);
-})();
-</script>
-</head>
+:root{--bg:#0a0e1a;--pn:#121a2e;--ln:#1f2b4a;--or:#ff9f1a;--bl:#29b6ff;--tx:#e8eefc;--mu:#7d8bb0}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,sans-serif;overflow:hidden}
+button,input,textarea{font:inherit;color:inherit}
+button{background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:8px 12px;cursor:pointer}
+button.pri{background:linear-gradient(135deg,var(--or),#ff6a00);border:0;color:#111;font-weight:700}
+input,textarea{background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:10px;width:100%}
+.scr{display:none;height:100%}.scr.on{display:flex}
+.ctr{align-items:center;justify-content:center;padding:16px}
+.card{background:var(--pn);border:1px solid var(--ln);border-radius:16px;padding:22px;max-width:420px;width:100%;display:flex;flex-direction:column;gap:12px}
+h1{margin:0;color:var(--or);text-shadow:0 0 14px #ff9f1a88;letter-spacing:2px;font-size:22px}
+.err{color:#ff6b6b;margin:0;min-height:1em}.mu{color:var(--mu)}.pad{padding:16px}
+#app{flex-direction:column;padding-top:env(safe-area-inset-top)}
+.bar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--pn);border-bottom:1px solid var(--ln)}
+.bar .sp,.bar #who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#who{color:var(--mu);font-size:13px;text-align:right}
+.cols{flex:1;display:flex;min-height:0}
+#side{width:100%;display:flex;flex-direction:column;border-right:1px solid var(--ln);min-height:0}
+#main{display:none;flex:1;flex-direction:column;min-width:0;min-height:0}
+#app.open #side{display:none}#app.open #main{display:flex}
+@media(min-width:700px){#side{width:320px;flex:none}#main{display:flex}#app.open #side{display:flex}#back{display:none}}
+.add{display:flex;gap:6px;padding:8px}#list{overflow:auto;flex:1}
+.row{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--ln);cursor:pointer}
+.row.sel,.row:hover{background:#17223d}
+.row i{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--bl),#0057ff);display:grid;place-items:center;font-style:normal;font-weight:700;flex:none}
+.row div{min-width:0}.row b,.row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row small{color:var(--mu)}
+#empty{margin:auto}#chat{display:none;flex-direction:column;flex:1;min-height:0}
+#msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
+.msg{max-width:78%;padding:8px 11px;border-radius:14px;word-wrap:break-word;white-space:pre-wrap}
+.msg small{display:block;font-size:10px;opacity:.75;text-align:right;margin-top:2px}.msg small.rd{color:#0a3d91;opacity:1;font-weight:700}
+.me{align-self:flex-end;background:linear-gradient(135deg,#ff9f1a,#ff6a00);color:#111}
+.th{align-self:flex-start;background:var(--pn);border:1px solid var(--ln)}
+.inp{display:flex;gap:6px;padding:8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));background:var(--pn);border-top:1px solid var(--ln)}
+.ov{position:fixed;inset:0;background:#000d;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:9}.ov.on{display:flex}
+#rv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#lv{position:absolute;right:12px;top:12px;width:110px;border-radius:12px;border:2px solid var(--or);background:#000;z-index:1}
+#cs{position:relative;z-index:1;text-shadow:0 0 8px #000}
+#hang{position:relative;z-index:1;background:#e53935;border:0;font-size:18px;padding:12px 22px;margin-top:auto;margin-bottom:30px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;border:1px solid var(--or);padding:8px 14px;border-radius:20px;opacity:0;transition:.3s;pointer-events:none;z-index:20;max-width:90%;text-align:center}
+</style></head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <radialGradient id="og" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff3b8"/><stop offset=".38" stop-color="#ffb347"/><stop offset="1" stop-color="#e8590c"/></radialGradient>
-</defs></svg>
+<div id="setup" class="scr ctr"><div class="card"><h1>⚡ KAKAROT CHAT</h1>
+<p class="mu">One-time setup: Firebase console → <b>kakarot-chat-web</b> → Project settings → General → Your apps → add a Web app (&lt;/&gt;), then paste its config here.</p>
+<textarea id="cfgt" rows="7" placeholder='const firebaseConfig = {&#10;  apiKey: "…",&#10;  appId: "1:976639131346:web:…"&#10;};'></textarea>
+<button id="cfgb" class="pri">Save</button><p id="cfge" class="err"></p></div></div>
 
-<section id="boot" class="screen center">
-  <svg class="orb" viewBox="0 0 100 100" width="96" height="96" aria-hidden="true"><circle cx="50" cy="50" r="46" fill="url(#og)"/><path fill="#c1121f" d="M50,21.4 L52.06,27.17 L58.18,27.34 L53.33,31.08 L55.05,36.96 L50,33.5 L44.95,36.96 L46.67,31.08 L41.82,27.34 L47.94,27.17Z M30,41.4 L32.06,47.17 L38.18,47.34 L33.33,51.08 L35.05,56.96 L30,53.5 L24.95,56.96 L26.67,51.08 L21.82,47.34 L27.94,47.17Z M70,41.4 L72.06,47.17 L78.18,47.34 L73.33,51.08 L75.05,56.96 L70,53.5 L64.95,56.96 L66.67,51.08 L61.82,47.34 L67.94,47.17Z M50,61.4 L52.06,67.17 L58.18,67.34 L53.33,71.08 L55.05,76.96 L50,73.5 L44.95,76.96 L46.67,71.08 L41.82,67.34 L47.94,67.17Z"/></svg>
-  <div class="title">KAKAROT CHAT</div>
-  <pre id="bootLog" aria-live="polite"></pre>
-  <div class="hint">tap to skip</div>
-  <noscript><div class="hint" style="color:var(--red)">JavaScript is turned off in this browser. Kakarot Chat needs it.</div></noscript>
-</section>
+<div id="login" class="scr ctr"><div class="card"><h1>⚡ KAKAROT CHAT</h1><p class="mu">Private 1:1 chat &amp; calls. Sign in once, stay signed in.</p>
+<button id="gbtn" class="pri">Sign in with Google</button><p id="lerr" class="err"></p><a href="#" id="rst" class="mu">reset config</a></div></div>
 
-<section id="fatal" class="screen hidden">
-  <div class="card"><h3 style="margin:0 0 8px;color:var(--red)">Can’t start</h3><p id="fatalText" style="margin:0"></p></div>
-</section>
+<div id="app" class="scr"><div class="bar"><b style="color:var(--or)">⚡ KAKAROT</b><span id="who"></span><button id="bell">🔔</button><button id="out">⎋</button></div>
+<div class="cols"><div id="side"><div class="add"><input id="em" type="email" placeholder="Friend's Google email"><button id="addb" class="pri">＋</button></div><div id="list"></div></div>
+<div id="main"><div id="empty" class="mu">Pick a friend to chat</div>
+<div id="chat"><div class="bar"><button id="back">←</button><b id="cn" class="sp"></b><button id="ca">📞</button><button id="cv">🎥</button><button id="cb">⛔</button><button id="cr">🚩</button></div>
+<div id="msgs"></div><div class="inp"><input id="inp" placeholder="Message" autocomplete="off"><button id="sb" class="pri">➤</button></div></div></div></div></div>
 
-<section id="setup" class="screen hidden">
-  <form id="setupForm" class="card" autocomplete="off" novalidate>
-    <div class="brand">
-      <svg viewBox="0 0 100 100" width="40" height="40" aria-hidden="true"><circle cx="50" cy="50" r="46" fill="url(#og)"/><path fill="#c1121f" d="M50,21.4 L52.06,27.17 L58.18,27.34 L53.33,31.08 L55.05,36.96 L50,33.5 L44.95,36.96 L46.67,31.08 L41.82,27.34 L47.94,27.17Z M30,41.4 L32.06,47.17 L38.18,47.34 L33.33,51.08 L35.05,56.96 L30,53.5 L24.95,56.96 L26.67,51.08 L21.82,47.34 L27.94,47.17Z M70,41.4 L72.06,47.17 L78.18,47.34 L73.33,51.08 L75.05,56.96 L70,53.5 L64.95,56.96 L66.67,51.08 L61.82,47.34 L67.94,47.17Z M50,61.4 L52.06,67.17 L58.18,67.34 L53.33,71.08 L55.05,76.96 L50,73.5 L44.95,76.96 L46.67,71.08 L41.82,67.34 L47.94,67.17Z"/></svg>
-      <div><div class="title">KAKAROT CHAT</div><div class="sub">private · encrypted · yours</div></div>
-    </div>
-    <label for="inName">Callsign</label>
-    <input id="inName" type="text" maxlength="24" placeholder="e.g. Kakarot" autocomplete="off" autocapitalize="words">
-    <label for="inCode">Secret code</label>
-    <div class="row2">
-      <input id="inCode" type="password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="shared with your friends only">
-      <button type="button" id="btnEye" class="ico" aria-label="Show or hide code">👁</button>
-      <button type="button" id="btnGen" class="ico" aria-label="Generate a strong code">🎲</button>
-    </div>
-    <label class="chk"><input id="inKeep" type="checkbox" checked> Stay signed in on this device</label>
-    <div id="setupErr" class="err" role="alert"></div>
-    <button id="btnEnter" class="btn primary" type="submit">ENTER THE ROOM</button>
-    <p class="fine">🔒 Messages are locked on your phone with the secret code before they leave it. The server only holds scrambled data it can’t read. Everyone in the group needs the same code. Tap 🎲 for a strong one.</p>
-  </form>
-</section>
+<div id="call" class="ov"><video id="rv" autoplay playsinline></video><video id="lv" autoplay playsinline muted></video><div id="cs">Calling…</div><button id="hang">⏹ End</button></div>
+<div id="ring" class="ov"><h1 id="rn">Incoming call</h1><div><button id="acc" class="pri">Accept</button> <button id="dec">Decline</button></div></div>
+<div id="toast"></div>
 
-<section id="chat" class="screen hidden">
-  <header>
-    <svg viewBox="0 0 100 100" width="34" height="34" aria-hidden="true"><circle cx="50" cy="50" r="46" fill="url(#og)"/><path fill="#c1121f" d="M50,21.4 L52.06,27.17 L58.18,27.34 L53.33,31.08 L55.05,36.96 L50,33.5 L44.95,36.96 L46.67,31.08 L41.82,27.34 L47.94,27.17Z M30,41.4 L32.06,47.17 L38.18,47.34 L33.33,51.08 L35.05,56.96 L30,53.5 L24.95,56.96 L26.67,51.08 L21.82,47.34 L27.94,47.17Z M70,41.4 L72.06,47.17 L78.18,47.34 L73.33,51.08 L75.05,56.96 L70,53.5 L64.95,56.96 L66.67,51.08 L61.82,47.34 L67.94,47.17Z M50,61.4 L52.06,67.17 L58.18,67.34 L53.33,71.08 L55.05,76.96 L50,73.5 L44.95,76.96 L46.67,71.08 L41.82,67.34 L47.94,67.17Z"/></svg>
-    <div class="hd">
-      <div class="title">KAKAROT CHAT</div>
-      <div class="status"><span id="stDot" class="dot wait"></span><span id="stTxt">LINKING…</span><span id="stCount"></span></div>
-    </div>
-    <button id="btnMenu" class="ico" aria-label="Menu">⋮</button>
-  </header>
-  <div id="menu" class="menu hidden">
-    <div id="roomFp" class="info"></div>
-    <button id="mInvite" type="button">➕ Invite a friend</button>
-    <button id="mSound" type="button">🔔 Sound: on</button>
-    <button id="mNotify" type="button">📲 Notifications: on</button>
-    <button id="mWipe" type="button">🧹 Wipe server history</button>
-    <button id="mLeave" type="button">🚪 Leave this room</button>
-  </div>
-  <main id="list" aria-live="polite"></main>
-  <form id="composer" autocomplete="off">
-    <textarea id="msgBox" rows="1" maxlength="2000" placeholder="Type a message…" enterkeyhint="send"></textarea>
-    <button id="btnSend" class="send" type="submit" aria-label="Send">➤</button>
-  </form>
-</section>
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import{getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,onAuthStateChanged,signOut}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import{getFirestore,doc,setDoc,getDoc,getDocs,updateDoc,addDoc,deleteDoc,collection,query,where,orderBy,limit,onSnapshot,serverTimestamp,arrayUnion}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import{getMessaging,getToken,isSupported}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js';
 
-<div id="modal" class="modal hidden"><div class="box">
-  <h3 id="mTitle"></h3><p id="mText"></p>
-  <div class="acts"><button id="mNo" type="button" class="btn">Cancel</button><button id="mOk" type="button" class="btn primary">OK</button></div>
-</div></div>
-<div id="toast" role="status"></div>
+const $=i=>document.getElementById(i);
+const show=id=>['setup','login','app'].forEach(s=>$(s).classList.toggle('on',s===id));
+const toast=m=>{const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.opacity=0,3500)};
 
-<script>
-(() => {
-'use strict';
+// Project: kakarot-chat-web (from google-services.json). apiKey + appId come from the Web app config (pasted once on first run).
+const BASE={authDomain:'kakarot-chat-web.firebaseapp.com',projectId:'kakarot-chat-web',storageBucket:'kakarot-chat-web.firebasestorage.app',messagingSenderId:'976639131346'};
+let saved={};try{saved=JSON.parse(localStorage.getItem('kk_cfg')||'{}')}catch{}
+const VAPID=saved.vapidKey||'BMjH8aYBlqq3fmz8tzRthaLYJTbwNXvg-QDVZ_Ev582sby9L2uHlYcVXvKhKFvqwsf9wA0h1gw6lGzFp53oLdIE';
+const cfg={...BASE,apiKey:saved.apiKey,appId:saved.appId};
+const ICE=[{urls:'stun:stun.l.google.com:19302'}]; // add a TURN server here if calls fail on mobile data
 
-/* ================= helpers ================= */
-const $ = (id) => document.getElementById(id);
-const enc = new TextEncoder();
-const dec = new TextDecoder();
-const hex = (u8) => Array.from(u8, (b) => b.toString(16).padStart(2, '0')).join('');
-const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192)); return btoa(s); };
-const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-const b64url = (u8) => b64(u8).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const rnd = (n) => crypto.getRandomValues(new Uint8Array(n));
-const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const store = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (_) { return false; } },
-  del(k) { try { localStorage.removeItem(k); } catch (_) {} },
-};
-const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-const coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
-// Your cloud server. It is fixed: the app always uses this address (change it here if you ever move the server).
-const SERVER_URL = 'https://kakarot-chat-1.onrender.com';
+$('rst').onclick=e=>{e.preventDefault();localStorage.removeItem('kk_cfg');location.reload()};
+$('cfgb').onclick=()=>{const o={};for(const m of $('cfgt').value.matchAll(/(\w+)\s*:\s*["']([^"']+)["']/g))o[m[1]]=m[2];
+ const bad=(o.projectId&&o.projectId!==BASE.projectId)||(o.messagingSenderId&&o.messagingSenderId!==BASE.messagingSenderId);
+ const e=bad?'That config is from another project ('+(o.projectId||o.messagingSenderId)+'). Use the Web app of kakarot-chat-web.':(!o.apiKey||!/:web:/.test(o.appId||''))?'Need the Web app config: apiKey and appId (contains ":web:").':'';
+ $('cfge').textContent=e;if(e)return;
+ localStorage.setItem('kk_cfg',JSON.stringify({apiKey:o.apiKey,appId:o.appId,vapidKey:o.vapidKey}));location.reload()};
 
-const S = {
-  gen: 0, cfg: null, dev: '', roomId: '', roomKey: '', key: null, api: null,
-  msgs: new Map(), outbox: [], online: 0, state: 'idle',
-  ctrl: null, wake: null, flushing: false, lastByte: 0, hiddenAt: 0, unread: 0,
-};
+function main(){
+const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app);
+const col=(...p)=>collection(db,...p),dc=(...p)=>doc(db,...p),rtc=id=>dc('chats',id,'rtc','s');
+let me,chats=[],cur,docs=[],unM,unB,blocked=false,mineB=false,first=true,seen={},swr,pc,ls,unR,icen=0,callId,gotAns=false,sig={},ring;
+const nm=c=>c.names?.[c.members.find(u=>u!==me.uid)]||'Friend';
 
-/* ================= crypto ================= */
-const normCode = (s) => String(s || '').normalize('NFKC').replace(/[\s-]+/g, '').toUpperCase();
+// ---------- auth (Google only; Firebase keeps you signed in)
+const gp=new GoogleAuthProvider();
+$('gbtn').onclick=async()=>{try{await signInWithPopup(auth,gp)}catch(e){
+ ['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(e.code)?signInWithRedirect(auth,gp)
+ :$('lerr').textContent=(e.code||e.message)+(e.code==='auth/unauthorized-domain'?' — add this site in Firebase → Authentication → Settings → Authorized domains':'')}};
+$('out').onclick=()=>signOut(auth).then(()=>location.reload());
+onAuthStateChanged(auth,async u=>{
+ if(!u){me=null;show('login');return}
+ me=u;$('who').textContent=u.displayName||u.email;
+ try{await setDoc(dc('users',u.uid),{name:u.displayName||u.email,photo:u.photoURL||'',email:(u.email||'').toLowerCase()},{merge:true})}catch(e){toast('Firestore: '+(e.code||e.message))}
+ show('app');watchChats();push(false)});
 
-// One passphrase -> three independent secrets: the room name, the server password, the message key.
-// The server only ever sees the first two; the message key never leaves this device.
-async function deriveKeys(code) {
-  const base = await crypto.subtle.importKey('raw', enc.encode(normCode(code)), 'PBKDF2', false, ['deriveBits']);
-  const master = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode('kakarot-chat/v1'), iterations: 200000 }, base, 256);
-  const hk = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveBits']);
-  const part = async (label) => new Uint8Array(await crypto.subtle.deriveBits(
-    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('kakarot-chat/hkdf'), info: enc.encode(label) }, hk, 256));
-  const room = await part('room');
-  const auth = await part('auth');
-  const encKey = await part('enc');
-  return {
-    roomId: hex(room),
-    roomKey: b64url(auth),
-    key: await crypto.subtle.importKey('raw', encKey, 'AES-GCM', false, ['encrypt', 'decrypt']),
-  };
+// ---------- chat list
+function watchChats(){onSnapshot(query(col('chats'),where('members','array-contains',me.uid)),s=>{
+ chats=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.ut?.seconds||0)-(a.ut?.seconds||0));
+ for(const c of chats){const ts=c.ut?.seconds||0;
+  if(!first&&c.lf&&c.lf!==me.uid&&ts>(seen[c.id]||0)&&(document.hidden||cur?.id!==c.id))notify(c);
+  seen[c.id]=Math.max(ts,seen[c.id]||0);callWatch(c)}
+ first=false;renderList();
+ if(cur){const n=chats.find(c=>c.id===cur.id);if(n)cur=n}},e=>toast('Chats: '+e.code))}
+function renderList(){const l=$('list');l.textContent='';
+ if(!chats.length){l.innerHTML='<p class="mu pad">No chats yet. Add a friend by email (they must sign in once first).</p>';return}
+ for(const c of chats){const b=document.createElement('div'),n=nm(c);b.className='row'+(cur&&cur.id===c.id?' sel':'');
+  b.innerHTML='<i></i><div><b></b><small></small></div>';
+  b.querySelector('i').textContent=(n[0]||'?').toUpperCase();b.querySelector('b').textContent=n;b.querySelector('small').textContent=c.last||'';
+  b.onclick=()=>openChat(c.id);l.append(b)}}
+$('addb').onclick=async()=>{const em=$('em').value.trim().toLowerCase();if(!em)return;
+ if(em===(me.email||'').toLowerCase())return toast("That's you!");
+ try{const s=await getDocs(query(col('users'),where('email','==',em),limit(1)));
+  if(s.empty)return toast('No user with that email. They must sign in once first.');
+  const f=s.docs[0],id=[me.uid,f.id].sort().join('_');
+  await setDoc(dc('chats',id),{members:[me.uid,f.id].sort(),names:{[me.uid]:me.displayName||me.email,[f.id]:f.data().name}},{merge:true});
+  $('em').value='';openChat(id)}catch(e){toast(e.code||e.message)}};
+$('em').onkeydown=e=>{if(e.key==='Enter')$('addb').click()};
+
+// ---------- conversation
+function openChat(id){cur=chats.find(c=>c.id===id)||{id,members:id.split('_'),names:{}};
+ $('app').classList.add('open');$('empty').style.display='none';$('chat').style.display='flex';
+ $('cn').textContent=nm(cur);$('msgs').textContent='';
+ unM&&unM();unB&&unB();
+ unM=onSnapshot(query(col('chats',id,'messages'),orderBy('t','desc'),limit(100)),s=>{docs=s.docs.reverse();renderMsgs();markRead()},e=>toast('Messages: '+e.code));
+ unB=onSnapshot(col('chats',id,'blocks'),s=>{blocked=!s.empty;mineB=s.docs.some(d=>d.id===me.uid);
+  $('cb').textContent=mineB?'✅':'⛔';$('cb').title=mineB?'Unblock':'Block';$('inp').disabled=blocked;$('inp').placeholder=blocked?'Chat is blocked':'Message'});
+ renderList()}
+function renderMsgs(){const m=$('msgs'),end=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.textContent='';
+ for(const d of docs){const x=d.data({serverTimestamps:'estimate'}),mine=x.from===me.uid,e=document.createElement('div'),s=document.createElement('small');
+  e.className='msg '+(mine?'me':'th');e.textContent=x.text;
+  const t=x.t?.toDate?x.t.toDate():new Date();
+  s.textContent=t.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+(mine?(d.metadata.hasPendingWrites?' 🕓':x.read?' ✓✓':' ✓'):'');
+  if(mine&&x.read)s.className='rd';e.append(s);m.append(e)}
+ if(end)m.scrollTop=m.scrollHeight}
+function markRead(){if(document.hidden)return;for(const d of docs){const x=d.data();if(x.from!==me.uid&&!x.read)updateDoc(d.ref,{read:true}).catch(()=>{})}}
+document.addEventListener('visibilitychange',markRead);
+async function send(){const t=$('inp').value.trim();if(!t||!cur||blocked)return;$('inp').value='';
+ try{await addDoc(col('chats',cur.id,'messages'),{from:me.uid,text:t.slice(0,2000),t:serverTimestamp(),read:false});
+  await updateDoc(dc('chats',cur.id),{last:t.slice(0,60),ut:serverTimestamp(),lf:me.uid})}
+ catch(e){toast(e.code==='permission-denied'?'Not allowed (blocked?)':e.message)}}
+$('sb').onclick=send;$('inp').onkeydown=e=>{if(e.key==='Enter')send()};
+$('back').onclick=()=>$('app').classList.remove('open');
+$('cb').onclick=async()=>{if(!cur)return;const was=mineB;
+ try{was?await deleteDoc(dc('chats',cur.id,'blocks',me.uid)):await setDoc(dc('chats',cur.id,'blocks',me.uid),{t:serverTimestamp()});toast(was?'Unblocked':'Blocked')}catch(e){toast(e.code||e.message)}};
+$('cr').onclick=async()=>{if(!cur)return;const r=prompt('Report this user. Reason?');if(!r)return;
+ try{await addDoc(col('reports'),{by:me.uid,against:cur.members.find(u=>u!==me.uid),chat:cur.id,reason:r.slice(0,300),t:serverTimestamp()});toast('Reported 🚩')}catch(e){toast(e.code||e.message)}};
+
+// ---------- notifications (works while the app is open; closed-app push needs the Cloud Function)
+async function notify(c){try{if(!window.Notification||Notification.permission!=='granted')return;
+ const o={body:c.last||'',tag:c.id};swr?swr.showNotification(nm(c),o):new Notification(nm(c),o)}catch{}}
+async function push(ask){try{
+ if(!window.Notification||!(await isSupported()))return ask&&toast('Push not supported here (iPhone: Add to Home Screen first)');
+ if(Notification.permission!=='granted'){if(!ask)return;if(await Notification.requestPermission()!=='granted')return toast('Notifications blocked')}
+ swr=await navigator.serviceWorker.register('./firebase_messaging_sw.js?c='+encodeURIComponent(JSON.stringify(cfg)));
+ await navigator.serviceWorker.ready;
+ const tok=await getToken(getMessaging(app),{vapidKey:VAPID,serviceWorkerRegistration:swr});
+ await setDoc(dc('tokens',me.uid),{t:arrayUnion(tok)},{merge:true});ask&&toast('🔔 Notifications on')}
+ catch(e){ask&&toast('Push: '+(e.code||e.message))}}
+$('bell').onclick=()=>push(true);
+
+// ---------- voice/video calls (WebRTC, signaling through Firestore)
+const media=type=>navigator.mediaDevices.getUserMedia({audio:true,video:type==='video'?{facingMode:'user'}:false});
+const hideRing=()=>{ring=null;$('ring').classList.remove('on')};
+const endMark=id=>updateDoc(dc('chats',id),{call:{by:me.uid,st:'ended',ts:Date.now()}}).catch(()=>{});
+function mkpc(id,peer){pc=new RTCPeerConnection({iceServers:ICE});icen=0;gotAns=false;sig={};callId=id;
+ ls.getTracks().forEach(t=>pc.addTrack(t,ls));
+ pc.ontrack=e=>{$('rv').srcObject=e.streams[0]};
+ pc.onicecandidate=e=>e.candidate&&setDoc(rtc(id),{['ice_'+me.uid]:arrayUnion(JSON.stringify(e.candidate))},{merge:true}).catch(()=>{});
+ pc.onconnectionstatechange=()=>{const s=pc.connectionState;if(s==='connected')$('cs').textContent='Connected';if(s==='failed'){toast('Call failed (network)');hang()}};
+ $('lv').srcObject=ls;$('lv').style.display=ls.getVideoTracks().length?'block':'none';$('cs').textContent='Connecting…';$('call').classList.add('on');
+ const apply=async()=>{try{
+  if(sig.answer&&!gotAns&&pc.signalingState==='have-local-offer'){gotAns=true;await pc.setRemoteDescription(sig.answer)}
+  const a=()=>sig['ice_'+peer]||[];
+  if(pc.remoteDescription)while(icen<a().length)await pc.addIceCandidate(JSON.parse(a()[icen++]))}catch(e){console.warn(e)}};
+ unR=onSnapshot(rtc(id),s=>{sig=s.data()||{};if(pc)apply()})}
+async function startCall(type){if(!cur||blocked||pc)return;const id=cur.id,peer=cur.members.find(u=>u!==me.uid);
+ try{ls=await media(type)}catch{return toast('Allow the mic'+(type==='video'?' and camera':'')+' to call')}
+ mkpc(id,peer);$('cs').textContent='Calling…';
+ try{const o=await pc.createOffer();await setDoc(rtc(id),{offer:{type:o.type,sdp:o.sdp},from:me.uid});await pc.setLocalDescription(o);
+  await updateDoc(dc('chats',id),{call:{by:me.uid,type,st:'ringing',ts:Date.now()}});
+  setTimeout(()=>{if(pc&&callId===id&&pc.connectionState!=='connected')hang()},45000)}catch(e){toast('Call error: '+(e.code||e.message));hang()}}
+async function accept(){const c=ring;if(!c)return;hideRing();
+ try{ls=await media(c.call.type)}catch{toast('Allow the mic/camera to answer');return endMark(c.id)}
+ mkpc(c.id,c.call.by);
+ try{const o=(await getDoc(rtc(c.id))).data()?.offer;if(!o)throw new Error('no offer');
+  await pc.setRemoteDescription(o);const a=await pc.createAnswer();await pc.setLocalDescription(a);
+  await updateDoc(rtc(c.id),{answer:{type:a.type,sdp:a.sdp}});
+  await updateDoc(dc('chats',c.id),{call:{...c.call,st:'active',ts:Date.now()}})}catch(e){toast('Call failed');hang()}}
+function hang(tell=true){const id=callId;
+ try{pc&&pc.close()}catch{}
+ ls&&ls.getTracks().forEach(t=>t.stop());pc=ls=null;unR&&unR();unR=null;callId=null;
+ $('call').classList.remove('on');$('rv').srcObject=null;$('lv').srcObject=null;
+ if(id&&tell){endMark(id);deleteDoc(rtc(id)).catch(()=>{})}}
+function callWatch(c){const k=c.call;if(!k)return;
+ if(k.st==='ringing'&&k.by!==me.uid&&Date.now()-k.ts<60000&&!pc&&!ring){ring=c;$('rn').textContent=nm(c)+' · '+(k.type==='video'?'video':'voice')+' call';$('ring').classList.add('on')}
+ else if(k.st!=='ringing'&&ring&&ring.id===c.id)hideRing();
+ if(k.st==='ended'&&callId===c.id)hang(false)}
+$('ca').onclick=()=>startCall('audio');$('cv').onclick=()=>startCall('video');
+$('hang').onclick=()=>hang();$('acc').onclick=accept;$('dec').onclick=()=>{const c=ring;hideRing();c&&endMark(c.id)};
 }
 
-function genCode() {
-  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // 32 symbols = 5 bits each, no look-alikes
-  const r = rnd(20);
-  let s = '';
-  for (let i = 0; i < 20; i++) { s += A[r[i] & 31]; if (i % 5 === 4 && i < 19) s += '-'; }
-  return s;
-}
-
-async function seal(obj, cid) {
-  let json = JSON.stringify(obj);
-  json += ' '.repeat((32 - (json.length % 32)) % 32);          // pad so exact length is less obvious
-  const iv = rnd(12);
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: enc.encode(cid) }, S.key, enc.encode(json));
-  return { iv: b64(iv), ct: b64(new Uint8Array(ct)) };
-}
-async function unseal(m) {
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(m.iv), additionalData: enc.encode(m.cid) }, S.key, unb64(m.ct));
-  return JSON.parse(dec.decode(pt));
-}
-
-/* ================= server api ================= */
-function makeApi(base, roomId, roomKey) {
-  const root = base + '/v1/rooms/' + roomId;
-  const hdr = { 'X-Room-Key': roomKey };
-  const authErr = () => { const e = new Error('auth'); e.auth = true; return e; };
-
-  async function call(method, path, body) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 15000);
-    try {
-      const res = await fetch(root + path, {
-        method, cache: 'no-store', signal: ctrl.signal,
-        headers: body ? Object.assign({ 'Content-Type': 'application/json' }, hdr) : hdr,
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      let data = null;
-      try { data = await res.json(); } catch (_) {}
-      if (res.status === 401 || res.status === 403) throw authErr();
-      return { ok: res.ok, status: res.status, data };
-    } finally { clearTimeout(t); }
-  }
-
-  return {
-    tail: (n) => call('GET', '/messages?tail=' + n),
-    post: (msg) => call('POST', '/messages', msg),
-    wipe: () => call('DELETE', ''),
-    // Live feed (Server-Sent Events read through fetch so the key stays in a header, not in the URL).
-    async stream(after, signal, onEvent, onBytes) {
-      const res = await fetch(root + '/stream?after=' + after, { headers: hdr, cache: 'no-store', signal });
-      if (res.status === 401 || res.status === 403) throw authErr();
-      if (!res.ok || !res.body) throw new Error('stream ' + res.status);
-      const reader = res.body.getReader();
-      const td = new TextDecoder();
-      let buf = '';
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) return;
-        onBytes();
-        buf += td.decode(value, { stream: true });
-        let i;
-        while ((i = buf.search(/\r?\n\r?\n/)) >= 0) {
-          const block = buf.slice(0, i);
-          buf = buf.slice(i).replace(/^\r?\n\r?\n/, '');
-          let ev = 'message', data = '';
-          for (const line of block.split(/\r?\n/)) {
-            if (line.startsWith('event:')) ev = line.slice(6).trim();
-            else if (line.startsWith('data:')) data += line.slice(5).trim();
-          }
-          if (!data) continue;
-          let obj;
-          try { obj = JSON.parse(data); } catch (_) { continue; }
-          await onEvent(ev, obj);
-        }
-      }
-    },
-  };
-}
-
-/* ================= messages ================= */
-const byTime = (a, b) => (a.ts - b.ts) || ((a.seq || 0) - (b.seq || 0));
-const sorted = () => Array.from(S.msgs.values()).sort(byTime);
-const slot = () => S.roomId.slice(0, 16);
-
-// Add (or confirm) one message. Returns true when something changed.
-async function ingest(m, pending) {
-  if (!m || typeof m.cid !== 'string' || typeof m.iv !== 'string' || typeof m.ct !== 'string') return false;
-  const ex = S.msgs.get(m.cid);
-  if (ex) {
-    if (ex.pending && !pending) {
-      ex.pending = false; ex.seq = m.seq || 0; ex.ts = m.ts || ex.ts;
-      S.outbox = S.outbox.filter((o) => o.cid !== m.cid);
-      return true;
-    }
-    return false;
-  }
-  const rec = { cid: m.cid, seq: m.seq || 0, ts: m.ts || Date.now(), iv: m.iv, ct: m.ct, pending: !!pending, n: '', t: '', mine: false, bad: false, failed: false };
-  try {
-    const o = await unseal(rec);
-    rec.n = String(o.n == null ? '?' : o.n).slice(0, 24);
-    rec.t = String(o.t == null ? '' : o.t).slice(0, 4000);
-    rec.mine = o.d === S.dev;
-  } catch (_) { rec.bad = true; }
-  S.msgs.set(rec.cid, rec);
-  return true;
-}
-
-function persist() {
-  const keep = sorted().filter((m) => !m.pending && !m.failed).slice(-300).map((m) => ({ cid: m.cid, seq: m.seq, ts: m.ts, iv: m.iv, ct: m.ct }));
-  store.set('kk_cache_' + slot(), keep);
-  store.set('kk_out_' + slot(), S.outbox);
-}
-
-async function loadCache() {
-  for (const m of store.get('kk_cache_' + slot(), [])) await ingest(m, false);
-  for (const o of store.get('kk_out_' + slot(), [])) {
-    if (!o || !o.cid) continue;
-    if (!S.msgs.has(o.cid)) await ingest({ cid: o.cid, iv: o.iv, ct: o.ct, ts: o.ts }, true);
-    if (S.msgs.has(o.cid) && S.msgs.get(o.cid).pending) S.outbox.push(o);
-  }
-}
-
-async function send(text) {
-  text = String(text).trim();
-  if (!text || !S.api) return;
-  const cid = hex(rnd(12));
-  const sealed = await seal({ v: 1, n: S.cfg.name, t: text, d: S.dev }, cid);
-  const ts = Date.now();
-  S.outbox.push({ cid, iv: sealed.iv, ct: sealed.ct, ts });
-  await ingest({ cid, iv: sealed.iv, ct: sealed.ct, ts }, true);
-  persist();
-  render(true);
-  flush();
-}
-
-async function flush() {
-  if (S.flushing || !S.api) return;
-  S.flushing = true;
-  const gen = S.gen;
-  try {
-    while (S.outbox.length && gen === S.gen) {
-      const o = S.outbox[0];
-      const r = await S.api.post({ cid: o.cid, iv: o.iv, ct: o.ct, kind: 'm' });
-      if (gen !== S.gen) return;
-      const rec = S.msgs.get(o.cid);
-      if (r.ok) {
-        S.outbox.shift();
-        if (rec) { rec.pending = false; if (r.data) { rec.seq = r.data.seq || rec.seq; rec.ts = r.data.ts || rec.ts; } }
-      } else if (r.status === 400 || r.status === 413) {
-        S.outbox.shift();
-        if (rec) { rec.pending = false; rec.failed = true; }
-      } else throw new Error('http ' + r.status);
-      persist();
-      render();
-    }
-  } catch (e) {
-    if (e && e.auth) setState('auth');
-    else if (gen === S.gen && S.outbox.length) setTimeout(flush, 3000);
-  } finally { S.flushing = false; }
-}
-
-/* ================= connection loop ================= */
-function setState(st) {
-  if (S.state === st) return;
-  S.state = st;
-  paintHeader();
-  if (!S.msgs.size) render();
-}
-
-async function onEvent(ev, d) {
-  if (ev === 'presence') { S.online = d.online | 0; paintHeader(); return; }
-  if (ev !== 'msg') return;
-  const existing = S.msgs.get(d.cid);
-  const isNew = !existing || existing.pending;
-  if (await ingest(d, false)) {
-    persist();
-    render();
-    const r = S.msgs.get(d.cid);
-    if (isNew && r && !r.mine) notify(r);
-  }
-}
-
-async function run(gen) {
-  let delay = 700;
-  while (gen === S.gen) {
-    let openedAt = 0;
-    try {
-      setState('connecting');
-      const t = await S.api.tail(500);
-      if (gen !== S.gen) return;
-      if (!t.ok) throw new Error('http ' + t.status);
-      let changed = false;
-      for (const m of (t.data && t.data.messages) || []) if (await ingest(m, false)) changed = true;
-      if (changed) { persist(); render(); }
-      const last = (t.data && t.data.last) || 0;
-      flush();
-      const ctrl = new AbortController();
-      S.ctrl = ctrl;
-      S.lastByte = Date.now();
-      const dog = setInterval(() => { if (Date.now() - S.lastByte > 50000) ctrl.abort(); }, 5000);
-      try {
-        await S.api.stream(last, ctrl.signal, onEvent, () => {
-          S.lastByte = Date.now();
-          if (!openedAt) openedAt = Date.now();
-          if (S.state !== 'online') setState('online');
-        });
-      } finally { clearInterval(dog); }
-      if (gen === S.gen) setState('retry');
-    } catch (e) {
-      if (gen !== S.gen) return;
-      if (e && e.auth) { setState('auth'); return; }
-      setState(navigator.onLine === false ? 'offline' : 'retry');
-    }
-    if (gen !== S.gen) return;
-    delay = openedAt && Date.now() - openedAt > 8000 ? 500 : Math.min(delay * 1.7, 15000);
-    await new Promise((resolve) => { S.wake = resolve; setTimeout(resolve, delay); });
-    S.wake = null;
-  }
-}
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { S.hiddenAt = Date.now(); return; }
-  S.unread = 0;
-  document.title = 'Kakarot Chat';
-  if (!S.roomId) return;
-  if (Date.now() - S.hiddenAt > 15000 && S.ctrl) S.ctrl.abort();   // the socket may have died in the background: resync
-  else if (S.wake) S.wake();
-});
-window.addEventListener('online', () => { if (S.wake) S.wake(); });
-window.addEventListener('offline', () => { if (S.roomId) setState('offline'); });
-
-/* ================= sound ================= */
-let ac = null;
-function unlockAudio() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (_) {} }
-function beep() {
-  try {
-    unlockAudio();
-    const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
-    o.type = 'sine'; o.frequency.setValueAtTime(660, t); o.frequency.exponentialRampToValueAtTime(990, t + 0.1);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.18);
-  } catch (_) {}
-}
-/* ================= system notifications ================= */
-const LN = () => window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
-const canNotify = () => !!(LN() || ('Notification' in window));
-const notifyAllowed = () => !!(LN() || ('Notification' in window && Notification.permission === 'granted'));
-async function askNotif() {   // call from a tap: asks permission and, in a browser, sets up sw.js
-  try {
-    if (LN()) { await LN().requestPermissions(); return; }
-    if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') await Notification.requestPermission();
-    if (Notification.permission === 'granted' && 'serviceWorker' in navigator) {
-      await navigator.serviceWorker.register('sw.js');
-      await navigator.serviceWorker.ready;
-    }
-  } catch (_) {}
-}
-async function sysNotify(title, body) {
-  try {
-    if (LN()) { await LN().schedule({ notifications: [{ id: Date.now() % 2000000000, title, body }] }); return; }
-    if (!notifyAllowed()) return;
-    let reg = null;
-    if ('serviceWorker' in navigator) { try { reg = await navigator.serviceWorker.getRegistration(); } catch (_) {} }
-    if (reg && reg.active) { await reg.showNotification(title, { body, tag: 'kk-msg', renotify: true, vibrate: [90, 40, 90] }); return; }
-    new Notification(title, { body, tag: 'kk-msg' });
-  } catch (_) {}
-}
-function paintNotify() { $('mNotify').textContent = store.get('kk_ntf', true) && notifyAllowed() ? '📲 Notifications: on' : '📵 Notifications: off'; }
-
-function notify(r) {
-  if (document.hidden) {
-    S.unread++; document.title = '(' + S.unread + ') Kakarot Chat';
-    if (r && !r.bad && store.get('kk_ntf', true)) sysNotify(r.n || 'Kakarot Chat', String(r.t || 'New message').slice(0, 90));
-    return;
-  }
-  if (store.get('kk_snd', true)) beep();
-  try { if (navigator.vibrate) navigator.vibrate(25); } catch (_) {}
-}
-
-/* ================= ui ================= */
-function showScreen(name) {
-  for (const id of ['boot', 'setup', 'chat', 'fatal']) $(id).classList.toggle('hidden', id !== name);
-}
-let toastT = 0;
-function toast(msg) {
-  const t = $('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
-}
-function ask(title, text, okLabel) {
-  return new Promise((resolve) => {
-    $('mTitle').textContent = title; $('mText').textContent = text; $('mOk').textContent = okLabel || 'OK';
-    $('modal').classList.remove('hidden');
-    const done = (v) => { $('modal').classList.add('hidden'); $('mOk').onclick = null; $('mNo').onclick = null; resolve(v); };
-    $('mOk').onclick = () => done(true);
-    $('mNo').onclick = () => done(false);
-  });
-}
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch (_) {}
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    const ok = document.execCommand('copy'); ta.remove(); return ok;
-  } catch (_) { return false; }
-}
-
-const ST = {
-  connecting: ['wait', 'LINKING…'], online: ['on', 'ONLINE'], retry: ['wait', 'RECONNECTING…'],
-  offline: ['off', 'OFFLINE'], auth: ['off', 'CODE REJECTED'], idle: ['wait', 'LINKING…'],
-};
-function paintHeader() {
-  const s = ST[S.state] || ST.idle;
-  $('stDot').className = 'dot ' + s[0];
-  $('stTxt').textContent = s[1];
-  $('stCount').textContent = S.state === 'online' ? (S.online > 1 ? ' · ' + S.online + ' linked' : ' · just you') : '';
-}
-
-function dayLabel(d) {
-  const now = new Date(), yest = new Date(now.getTime() - 864e5);
-  if (d.toDateString() === now.toDateString()) return 'TODAY';
-  if (d.toDateString() === yest.toDateString()) return 'YESTERDAY';
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' }).toUpperCase();
-}
-
-function render(stick) {
-  const box = $('list');
-  const near = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
-  const frag = document.createDocumentFragment();
-  frag.appendChild(el('div', 'sys', '🔒 End-to-end encrypted. The server can’t read this chat.'));
-  const arr = sorted();
-  if (!arr.length) {
-    const e = el('div', 'empty');
-    const ok = S.state === 'online';
-    e.appendChild(el('div', 'big', ok ? '🔥' : '📡'));
-    e.appendChild(el('div', '', ok ? 'No messages yet. Say something, Saiyan!'
-      : S.state === 'auth' ? 'The server rejected this room’s code. Leave the room and check your secret code.'
-      : 'Linking to the server… If this takes long, check the server address and your internet.'));
-    frag.appendChild(e);
-  }
-  let prev = null;
-  for (const m of arr) {
-    const d = new Date(m.ts), day = d.toDateString();
-    if (!prev || prev.day !== day) { frag.appendChild(el('div', 'day', dayLabel(d))); prev = null; }
-    const row = el('div', 'row ' + (m.mine ? 'mine' : 'them'));
-    const bub = el('div', 'bub' + (m.bad ? ' bad' : ''));
-    const grouped = prev && prev.n === m.n && prev.mine === m.mine && m.ts - prev.ts < 180000;
-    if (!m.mine && !grouped && !m.bad) bub.appendChild(el('div', 'who', m.n || '?'));
-    bub.appendChild(el('div', 'txt', m.bad ? '🔒 Can’t decrypt this message' : m.t));
-    const meta = el('div', 'meta');
-    meta.appendChild(el('span', '', d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })));
-    if (m.mine) meta.appendChild(el('span', 'tick', m.failed ? '✖' : m.pending ? '⏳' : '✓'));
-    bub.appendChild(meta);
-    row.appendChild(bub);
-    frag.appendChild(row);
-    prev = { n: m.n, mine: m.mine, ts: m.ts, day };
-  }
-  box.textContent = '';
-  box.appendChild(frag);
-  if (stick || near) box.scrollTop = box.scrollHeight;
-}
-
-function paintSound() { $('mSound').textContent = store.get('kk_snd', true) ? '🔔 Sound: on' : '🔕 Sound: off'; }
-
-/* ================= session ================= */
-async function enterRoom(cfg) {
-  cfg.url = SERVER_URL;   // the server is fixed in this app
-  const gen = ++S.gen;
-  if (S.ctrl) S.ctrl.abort();
-  if (S.wake) S.wake();
-  S.cfg = cfg; S.msgs = new Map(); S.outbox = []; S.online = 0; S.state = 'connecting'; S.unread = 0; S.flushing = false;
-  const k = await deriveKeys(cfg.code);
-  if (gen !== S.gen) return;
-  S.roomId = k.roomId; S.roomKey = k.roomKey; S.key = k.key;
-  S.api = makeApi(cfg.url, k.roomId, k.roomKey);
-  if (cfg.remember) store.set('kk_cfg', cfg); else store.del('kk_cfg');
-  $('roomFp').textContent = 'ROOM LINK ' + k.roomId.slice(0, 4).toUpperCase() + '-' + k.roomId.slice(4, 8).toUpperCase() + ' · friends must match';
-  $('menu').classList.add('hidden');
-  paintSound(); paintNotify();
-  showScreen('chat');
-  paintHeader();
-  await loadCache();
-  if (gen !== S.gen) return;
-  render(true);
-  run(gen);
-}
-
-function stopSession() {
-  S.gen++;
-  if (S.ctrl) S.ctrl.abort();
-  if (S.wake) S.wake();
-  S.roomId = ''; S.api = null; S.key = null; S.state = 'idle'; S.msgs = new Map(); S.outbox = [];
-}
-
-function clearLocalChat() {
-  S.msgs = new Map(); S.outbox = [];
-  store.del('kk_cache_' + slot()); store.del('kk_out_' + slot());
-  render(true);
-}
-
-function showSetup(pre) {
-  pre = pre || {};
-  const saved = store.get('kk_last', {});
-  $('inName').value = pre.name || saved.name || '';
-  $('inCode').value = pre.code || '';
-  $('inCode').type = 'password';
-  $('setupErr').textContent = '';
-  $('btnEnter').disabled = false; $('btnEnter').textContent = 'ENTER THE ROOM';
-  showScreen('setup');
-}
-
-function normUrl(u) {
-  u = String(u || '').trim();
-  if (!u) return '';
-  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
-  try { const x = new URL(u); return x.origin + x.pathname.replace(/\/+$/, ''); } catch (_) { return ''; }
-}
-
-$('setupForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  unlockAudio();
-  const err = (m) => { $('setupErr').textContent = m; };
-  const name = $('inName').value.trim().replace(/\s+/g, ' ').slice(0, 24);
-  const url = normUrl(SERVER_URL);
-  const code = $('inCode').value;
-  if (!name) return err('Pick a callsign so your friends know it’s you.');
-  if (!url) return err('No server address is set in this app.');
-  if (isNative && !/^https:/i.test(url)) return err('The Android app needs an https:// server address.');
-  if (normCode(code).length < 8) return err('That secret code is too short. Tap 🎲 to make a strong one.');
-  err('');
-  $('btnEnter').disabled = true; $('btnEnter').textContent = 'CALIBRATING…';
-  store.set('kk_last', { name });
-  if (store.get('kk_ntf', true)) askNotif();
-  try {
-    await enterRoom({ name, url, code, remember: $('inKeep').checked });
-  } catch (ex) {
-    $('btnEnter').disabled = false; $('btnEnter').textContent = 'ENTER THE ROOM';
-    err('Something went wrong starting the room. Try again.');
-    console.error(ex);
-  }
-});
-$('btnEye').addEventListener('click', () => { const i = $('inCode'); i.type = i.type === 'password' ? 'text' : 'password'; });
-$('btnGen').addEventListener('click', () => { $('inCode').value = genCode(); $('inCode').type = 'text'; toast('New secret code ready. Share it only with your friends.'); });
-document.addEventListener('paste', (e) => {
-  if ($('setup').classList.contains('hidden')) return;
-  const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
-  const c = /Secret code:\s*([A-Za-z0-9-]+)/i.exec(t);
-  if (c) { e.preventDefault(); $('inCode').value = c[1]; toast('Invite pasted'); }
-});
-
-/* composer */
-const box = $('msgBox');
-const autosize = () => { box.style.height = 'auto'; box.style.height = Math.min(box.scrollHeight, 120) + 'px'; };
-box.addEventListener('input', autosize);
-box.addEventListener('focus', () => setTimeout(() => { $('list').scrollTop = $('list').scrollHeight; }, 300));
-box.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !coarse) { e.preventDefault(); $('composer').requestSubmit(); } });
-$('composer').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = box.value;
-  box.value = ''; autosize();
-  if (text.trim()) send(text);
-  box.focus();
-});
-
-/* menu */
-const closeMenu = () => $('menu').classList.add('hidden');
-$('btnMenu').addEventListener('click', (e) => { e.stopPropagation(); $('menu').classList.toggle('hidden'); });
-document.addEventListener('click', (e) => { if (!$('menu').contains(e.target)) closeMenu(); });
-
-$('mInvite').addEventListener('click', async () => {
-  closeMenu();
-  const { url, code } = S.cfg;
-  const link = !isNative && location.origin === url ? '\n' + url + '/#code=' + encodeURIComponent(code) : '';
-  const text = 'Join me on Kakarot Chat 🔥\nServer: ' + url + '\nSecret code: ' + code + link;
-  try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
-  toast((await copyText(text)) ? 'Invite copied' : 'Could not copy the invite');
-});
-$('mSound').addEventListener('click', () => {
-  const v = !store.get('kk_snd', true);
-  store.set('kk_snd', v); paintSound(); closeMenu(); toast(v ? 'Sound on' : 'Sound off');
-});
-$('mNotify').addEventListener('click', async () => {
-  closeMenu();
-  if (!canNotify()) { toast('This browser can’t show notifications'); return; }
-  if (store.get('kk_ntf', true) && notifyAllowed()) { store.set('kk_ntf', false); paintNotify(); toast('Notifications off'); return; }
-  store.set('kk_ntf', true);
-  await askNotif();
-  paintNotify();
-  toast(notifyAllowed() ? 'Notifications on' : 'Notifications are blocked. Allow them in your browser’s site settings.');
-});
-$('mWipe').addEventListener('click', async () => {
-  closeMenu();
-  if (!(await ask('Wipe server history?', 'This deletes every stored message from the cloud server and from this device. Friends keep their own copies until they clear them.', 'Wipe'))) return;
-  try {
-    const r = await S.api.wipe();
-    if (!r.ok) throw new Error('http ' + r.status);
-    clearLocalChat(); toast('History wiped');
-  } catch (_) { toast('Could not reach the server'); }
-});
-$('mLeave').addEventListener('click', async () => {
-  closeMenu();
-  if (!(await ask('Leave this room?', 'Come back any time with the same secret code. Chat copies stay on this device unless you wipe them.', 'Leave'))) return;
-  stopSession(); store.del('kk_cfg');
-  showSetup();
-});
-
-/* ================= boot ================= */
-function fatal(msg) { $('fatalText').textContent = msg; showScreen('fatal'); }
-
-function route() {
-  let pre = {};
-  try {
-    const h = new URLSearchParams(location.hash.replace(/^#/, ''));
-    if (h.get('code')) pre.code = h.get('code');
-    if (location.hash) history.replaceState(null, '', location.pathname + location.search);
-  } catch (_) {}
-  const cfg = store.get('kk_cfg', null);
-  if (!pre.code && cfg && cfg.code && cfg.url && cfg.name) {
-    enterRoom(cfg).catch(() => showSetup(cfg));
-  } else showSetup(pre);
-}
-
-function boot() {
-  if (!window.crypto || !crypto.subtle || !window.fetch) {
-    return fatal('This browser can’t do encryption here. Open the app from your https:// server link, or use the Android app.');
-  }
-  S.dev = store.get('kk_dev', '') || hex(rnd(8));
-  store.set('kk_dev', S.dev);
-  const lines = ['> KAKAROT COMMS  v1.0', '> SCOUTER ............ ONLINE', '> KI ENCRYPTION ...... AES-256-GCM', '> CLOUD LINK ......... STANDBY', '> POWER LEVEL: OVER 9000'];
-  const log = $('bootLog');
-  let i = 0, done = false;
-  const finish = () => { if (done) return; done = true; route(); };
-  $('boot').addEventListener('click', finish);
-  (function next() {
-    if (done) return;
-    if (i < lines.length) { log.textContent += lines[i++] + '\n'; setTimeout(next, 240); } else setTimeout(finish, 600);
-  })();
-}
-boot();
-})();
+cfg.apiKey&&cfg.appId?main():show('setup');
 </script>
-</body>
-</html>
+</body></html>
