@@ -10,7 +10,7 @@
 [hidden]{display:none!important}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .screen{max-width:720px;height:100dvh;margin:0 auto;display:flex;flex-direction:column;padding:0 12px}
-#splash,#login{align-items:center;justify-content:center;text-align:center;gap:16px}
+#splash,#login,#fail{align-items:center;justify-content:center;text-align:center;gap:16px}
 h1,.logo{font:900 italic clamp(28px,8vw,44px)/1.05 Impact,"Arial Black",sans-serif;color:var(--orange);text-shadow:3px 3px 0 var(--blue);margin:0}
 button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 16px;cursor:pointer}
 button:disabled,input:disabled{opacity:.5;cursor:not-allowed}
@@ -43,16 +43,24 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
 #card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 0}
 #card .av{width:96px;height:96px;font-size:40px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--orange);padding:10px 16px;border-radius:10px;max-width:90vw}
+#why{color:#ff8a8a;margin:0;font-size:14px;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
-<main id="splash" class="screen"><div class="logo">Kakarot Chat</div></main>
+<main id="splash" class="screen"><div class="logo">Kakarot Chat</div><small id="slow" hidden>Connecting…</small></main>
 
 <main id="login" class="screen" hidden>
   <h1>Welcome to Kakarot Chat</h1>
   <button id="go" class="pri">Continue with Google</button>
   <p id="err" role="alert" hidden></p>
   <button id="retry" hidden>Retry</button>
+</main>
+
+<main id="fail" class="screen" hidden>
+  <h1>Kakarot Chat</h1>
+  <p id="failMsg" role="alert">Kakarot Chat could not connect. Please check your internet connection and try again.</p>
+  <p id="why" role="alert" hidden></p>
+  <button id="fretry" class="pri">Retry</button>
 </main>
 
 <main id="home" class="screen" hidden>
@@ -82,10 +90,60 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
 
 <div id="toast" role="status" hidden></div>
 
+<script>
+/* Safety net: if the app script cannot start - usually because Firebase could not be downloaded from Google's
+   official CDN (www.gstatic.com) - never leave the user on the splash screen: show a clear on-screen error. */
+(function () {
+  // Claude's preview (like other sandboxes) only allows a short list of script hosts, so Firebase can never load there.
+  function noFirebase() {
+    if (/(^|\.)(claudeusercontent\.com|claude\.ai)$/.test(location.hostname))
+      return "This page is open inside Claude's preview, which blocks Firebase (www.gstatic.com), so it cannot work here. Upload index.html to a real website (for example GitHub Pages) and open that address in Chrome.";
+    return "Firebase (v10.14.1) did not load from www.gstatic.com. Check your internet connection and any firewall or ad-blocker. If this page is inside a preview window, it cannot work there: put index.html on a real website address and open that in Chrome. Then tap Retry.";
+  }
+  function fail(why) {
+    var s = document.getElementById("splash");
+    if (window.__kc || !s || s.hidden) return;
+    s.hidden = true;
+    var w = document.getElementById("why");
+    w.textContent = why;
+    w.hidden = false;
+    document.getElementById("fail").hidden = false;
+    document.getElementById("fretry").onclick = function () { location.reload(); };
+  }
+  // A module script whose imports cannot be downloaded fires an error event straight away (caught here in the capture phase).
+  addEventListener("error", function (e) { if (e.target && e.target.tagName === "SCRIPT") fail(noFirebase()); }, true);
+  setTimeout(function () { var sl = document.getElementById("slow"); if (!window.__kc && sl) sl.hidden = false; }, 2000);
+  setTimeout(function () { fail(noFirebase()); }, 7000);
+})();
+</script>
 <script type="module">
-import { auth, db } from "./firebase.js";
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+/* Firebase loads ONLY from Google's official CDN (www.gstatic.com), as native ES modules.
+   All three imports must use the exact same version number - if you ever change it, change all three together. */
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+window.__kc = 1; // tells the safety net above that the app script started (so Firebase was downloaded)
+
+/* ---------- Firebase: configured and started once, right here ---------- */
+// This web config is the app's public client configuration, not a secret: real protection comes from
+// Firestore Security Rules and App Check. Never put an Admin SDK / service-account key in the app.
+const firebaseConfig = {
+  apiKey: "AIzaSyAFwdmFRWWCGoej3IvEY17v_WhhaOkwtNE",
+  authDomain: "kakarot-chat.firebaseapp.com",
+  projectId: "kakarot-chat",
+  storageBucket: "kakarot-chat.firebasestorage.app",
+  messagingSenderId: "948236334962",
+  appId: "1:948236334962:web:c08f4dd1465074a09a8feb"
+};
+
+let app, auth, db, provider;
+function initFirebase() { // ONE app; Auth and Firestore are both created from that same app
+  app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  provider = new GoogleAuthProvider();
+}
 
 const $ = (s) => document.querySelector(s);
 const show = (id) => document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -107,32 +165,43 @@ let me = null, unsubs = [], beat = 0, cur = null;
 const cache = {};
 
 /* ---------- Login ---------- */
-const provider = new GoogleAuthProvider();
 async function login() {
   $("#err").hidden = $("#retry").hidden = true;
   try {
-    await signInWithPopup(auth, provider); // onAuthStateChanged below opens the home screen
+    const cap = window.Capacitor;
+    const nativeGoogle = cap && cap.isNativePlatform && cap.isNativePlatform() && cap.isPluginAvailable("FirebaseAuthentication") && cap.Plugins.FirebaseAuthentication;
+    if (nativeGoogle) { // Google blocks sign-in popups inside Android/iOS WebViews, so the app uses the native Google dialog
+      const r = await nativeGoogle.signInWithGoogle({ skipNativeAuth: true });
+      await signInWithCredential(auth, GoogleAuthProvider.credential(r.credential.idToken));
+    } else {
+      await signInWithPopup(auth, provider); // first thing the tap does, or browsers block the popup
+    }
+    // onAuthStateChanged (see boot) calls onUser, which opens the home screen
   } catch (e) {
-    $("#err").textContent = e.code === "auth/popup-blocked"
-      ? "Popup blocked. Please allow popups for Kakarot Chat and try again."
-      : "Google sign-in failed. Please try again.";
+    const msgs = {
+      "auth/popup-blocked": "Popup blocked. Please allow popups for Kakarot Chat and try again.",
+      "auth/operation-not-supported-in-this-environment": "Google sign-in does not work on a page opened as a local file (file://). Open Kakarot Chat from http://localhost or from your website address instead.",
+      "auth/unauthorized-domain": "This web address (" + location.hostname + ") is not authorized for sign-in yet. Add it in Firebase Console > Authentication > Settings > Authorized domains."
+    };
+    $("#err").textContent = msgs[e && e.code] || "Google sign-in failed. Please try again.";
     $("#err").hidden = $("#retry").hidden = false;
   }
 }
 $("#go").onclick = $("#retry").onclick = login;
 
-// Runs on every app open: restores the saved Firebase session, or shows the login screen.
-onAuthStateChanged(auth, async (u) => {
+// Runs on every app open (and on login/logout): restores the saved Firebase session, or shows the login screen.
+async function onUser(u) {
   unsubs.forEach((f) => f()); unsubs = []; clearInterval(beat); closeChat();
   if (!u) { me = null; return show("login"); }
   me = { uid: u.uid, email: u.email || "", username: u.displayName || (u.email || "user").split("@")[0], profile_photo: u.photoURL || "" };
-  try { await ensureProfile(u); } catch { toast("Could not load your profile. Please try again."); }
   $("#me").replaceChildren(avatar(me));
+  show("home");
+  try { await ensureProfile(u); } catch { toast("Could not load your profile. Please try again."); }
+  if (!me || me.uid !== u.uid) return;
   presence("online");
   beat = setInterval(() => presence("online"), 60000);
   watchChats();
-  show("home");
-});
+}
 
 async function ensureProfile(u) {
   const uref = doc(db, "users", u.uid), now = serverTimestamp();
@@ -143,7 +212,7 @@ async function ensureProfile(u) {
 }
 
 function presence(status) {
-  if (!me) return;
+  if (!me || !db) return;
   const d = { status, last_active_at: serverTimestamp() };
   return Promise.all([updateDoc(doc(db, "users", me.uid), d), updateDoc(doc(db, "profiles", me.uid), d)]).catch(() => {});
 }
@@ -285,6 +354,35 @@ $("#rep").onclick = async () => {
     toast("Report sent.");
   } catch { toast("Report failed. Please try again."); }
 };
+
+/* ---------- Startup: splash max 2s, 5s timeout, never stuck ---------- */
+const failDefault = $("#failMsg").textContent;
+const fail = (why, head) => {
+  console.error("Kakarot Chat startup problem:", why);
+  $("#failMsg").textContent = head || failDefault;
+  const w = $("#why");
+  w.textContent = why || "";
+  w.hidden = !why;
+  show("fail");
+};
+$("#fretry").onclick = () => location.reload();
+function boot() {
+  // Firebase sign-in needs a web address. A page opened from storage (file:// or content://) can never sign in.
+  const webPage = /^(https?|chrome-extension):$/.test(location.protocol);
+  const nativeApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (!webPage && !nativeApp) {
+    $("#fretry").hidden = true;
+    return fail("Google sign-in only works on a web address, not on a file opened from your phone's storage (" + location.protocol + "//). Upload index.html to a website, for example GitHub Pages, and open that address in Chrome.", "Kakarot Chat can't run as a local file.");
+  }
+  const slow = setTimeout(() => ($("#slow").hidden = false), 2000);
+  const dead = setTimeout(() => fail("Timed out after 5 seconds while connecting to Firebase."), 5000);
+  const done = () => { clearTimeout(slow); clearTimeout(dead); };
+  try {
+    initFirebase();
+    onAuthStateChanged(auth, (u) => { done(); onUser(u).catch((e) => console.error("Kakarot Chat error:", e)); }, (e) => { done(); fail("Firebase sign-in service error: " + ((e && e.message) || e)); });
+  } catch (e) { done(); fail("Firebase failed to start: " + ((e && e.message) || e)); }
+}
+boot();
 </script>
 </body>
 </html>
