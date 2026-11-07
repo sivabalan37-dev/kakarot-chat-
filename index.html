@@ -170,7 +170,9 @@ async function login() {
   $("#err").hidden = $("#retry").hidden = true;
   try {
     const cap = window.Capacitor;
-    const nativeGoogle = cap && cap.isNativePlatform && cap.isNativePlatform() && cap.isPluginAvailable("FirebaseAuthentication") && cap.Plugins.FirebaseAuthentication;
+    const native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+    const nativeGoogle = native && cap.isPluginAvailable("FirebaseAuthentication") && cap.Plugins.FirebaseAuthentication;
+    if (native && !nativeGoogle) throw { code: "app/missing-google-plugin" }; // inside the app, Google sign-in cannot finish without the native plugin
     if (nativeGoogle) { // Google blocks sign-in popups inside Android/iOS WebViews, so the app uses the native Google dialog
       const r = await nativeGoogle.signInWithGoogle({ skipNativeAuth: true });
       await signInWithCredential(auth, GoogleAuthProvider.credential(r.credential.idToken));
@@ -180,11 +182,13 @@ async function login() {
     // onAuthStateChanged (see boot) calls onUser, which opens the home screen
   } catch (e) {
     const msgs = {
+      "app/missing-google-plugin": "This app build has no native Google sign-in. Add the @capacitor-firebase/authentication plugin, run npx cap sync, and rebuild the app.",
       "auth/popup-blocked": "Popup blocked. Please allow popups for Kakarot Chat and try again.",
       "auth/operation-not-supported-in-this-environment": "Google sign-in does not work on a page opened as a local file (file://). Open Kakarot Chat from http://localhost or from your website address instead.",
       "auth/unauthorized-domain": "This web address (" + location.hostname + ") is not authorized for sign-in yet. Add it in Firebase Console > Authentication > Settings > Authorized domains."
     };
-    $("#err").textContent = msgs[e && e.code] || "Google sign-in failed. Please try again.";
+    console.error("Sign-in failed:", e);
+    $("#err").textContent = msgs[e && e.code] || "Google sign-in failed (" + String((e && (e.code || e.message)) || e).slice(0, 90) + "). Please try again.";
     $("#err").hidden = $("#retry").hidden = false;
   }
 }
