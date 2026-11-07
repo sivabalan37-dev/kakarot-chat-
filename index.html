@@ -17,6 +17,7 @@ button:disabled,input:disabled{opacity:.5;cursor:not-allowed}
 button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--ki);outline-offset:2px}
 .pri{background:var(--orange);border-color:var(--orange);color:#1a0d00;font-weight:700}
 .plain{padding:0;border:0;background:none;border-radius:50%}
+#bell{font-size:22px}
 header{display:flex;align-items:center;gap:10px;padding:12px 0}
 header>b{flex:1;font-size:18px}
 input{width:100%;font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px}
@@ -64,7 +65,7 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
 </main>
 
 <main id="home" class="screen" hidden>
-  <header><b>Kakarot Chat</b><button id="me" class="plain" aria-label="Your profile"></button></header>
+  <header><b>Kakarot Chat</b><button id="bell" class="plain" aria-label="Turn on notifications" hidden>🔔</button><button id="me" class="plain" aria-label="Your profile"></button></header>
   <input id="q" type="search" placeholder="Search by username or full email" autocomplete="off">
   <div id="results"></div>
   <div id="list"></div>
@@ -121,7 +122,7 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
    All three imports must use the exact same version number - if you ever change it, change all three together. */
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 window.__kc = 1; // tells the safety net above that the app script started (so Firebase was downloaded)
 
@@ -201,6 +202,7 @@ async function onUser(u) {
   presence("online");
   beat = setInterval(() => presence("online"), 60000);
   watchChats();
+  enablePush(false);
 }
 
 async function ensureProfile(u) {
@@ -260,7 +262,7 @@ $("#me").onclick = () => {
   show("profile");
 };
 $("#pback").onclick = () => show("home");
-$("#out").onclick = async () => { await presence("offline"); await signOut(auth); };
+$("#out").onclick = async () => { await presence("offline"); await dropPush(); await signOut(auth); };
 
 /* ---------- Chat ---------- */
 function closeChat() { if (cur) cur.subs.forEach((f) => f()); cur = null; }
@@ -354,6 +356,45 @@ $("#rep").onclick = async () => {
     toast("Report sent.");
   } catch { toast("Report failed. Please try again."); }
 };
+
+/* ---------- Push notifications (Firebase Cloud Messaging) ---------- */
+const VAPID_KEY = "BAT67DHf8HEI_1YgrCAvTt_jfvX7hgAeU_7Mqs-nfAaVaNqRrDlzJHFTjVsxL0Cbx6i520fifcDV92PURMJJgEE"; // public Web Push key, safe in the page
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+let pushToken = "";
+// ask=false: only refresh this device's token if permission was already given. ask=true: the bell was tapped, so ask for permission.
+async function enablePush(ask) {
+  const bell = $("#bell");
+  try {
+    if (isNative()) {
+      const P = window.Capacitor.isPluginAvailable("PushNotifications") && window.Capacitor.Plugins.PushNotifications;
+      if (!P) return;
+      let ok = (await P.checkPermissions()).receive === "granted";
+      if (!ok && ask) ok = (await P.requestPermissions()).receive === "granted";
+      if (ok) pushToken = await new Promise((res, rej) => { P.addListener("registration", (t) => res(t.value)); P.addListener("registrationError", rej); P.register(); });
+    } else if ("Notification" in window && "serviceWorker" in navigator) {
+      let ok = Notification.permission === "granted";
+      if (!ok && ask) ok = (await Notification.requestPermission()) === "granted";
+      if (ok) {
+        const { getMessaging, getToken } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js");
+        const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js"); // must sit next to index.html
+        await navigator.serviceWorker.ready;
+        pushToken = await getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+      }
+    } else return;
+    if (pushToken && me) await updateDoc(doc(db, "users", me.uid), { fcm_tokens: arrayUnion(pushToken) });
+    bell.hidden = !!pushToken;
+    if (ask) toast(pushToken ? "Notifications are on." : "Notifications are blocked. Allow them in your browser or phone settings.");
+  } catch (e) {
+    console.error("Push setup failed:", e);
+    bell.hidden = false;
+    if (ask) toast("Could not turn on notifications.");
+  }
+}
+async function dropPush() { // on logout, so this device stops getting the old account's messages
+  if (pushToken && me) await updateDoc(doc(db, "users", me.uid), { fcm_tokens: arrayRemove(pushToken) }).catch(() => {});
+  pushToken = "";
+}
+$("#bell").onclick = () => enablePush(true);
 
 /* ---------- Startup: splash max 2s, 5s timeout, never stuck ---------- */
 const failDefault = $("#failMsg").textContent;
