@@ -31,7 +31,8 @@ service cloud.firestore {
         && chatId.split('_').hasAll(request.resource.data.participants);
       allow update: if signedIn()
         && request.auth.uid in resource.data.participants
-        && request.resource.data.participants == resource.data.participants;
+        && request.resource.data.participants == resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_message_at', 'last_message_text']);
     }
 
     match /messages/{messageId} {
@@ -43,6 +44,8 @@ service cloud.firestore {
         && request.resource.data.receiver_id in chatOf(request.resource.data.chat_id).participants
         && request.resource.data.text is string
         && request.resource.data.text.size() <= 4000
+        && request.resource.data.attachment_url is string
+        && request.resource.data.attachment_url.size() <= 2048
         && request.resource.data.deleted_for == []
         && request.resource.data.read_at == null
         && request.resource.data.delivered_at == null
