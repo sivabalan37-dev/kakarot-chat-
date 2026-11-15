@@ -99,7 +99,7 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
   function noFirebase() {
     if (/(^|\.)(claudeusercontent\.com|claude\.ai)$/.test(location.hostname))
       return "This page is open inside Claude's preview, which blocks Firebase (www.gstatic.com), so it cannot work here. Upload index.html to a real website (for example GitHub Pages) and open that address in Chrome.";
-    return "Firebase (v10.14.1) did not load from www.gstatic.com. Check your internet connection and any firewall or ad-blocker. If this page is inside a preview window, it cannot work there: put index.html on a real website address and open that in Chrome. Then tap Retry.";
+    return "Firebase (v11.10.0) did not load from www.gstatic.com. Check your internet connection and any firewall or ad-blocker. If this page is inside a preview window, it cannot work there: put index.html on a real website address and open that in Chrome. Then tap Retry.";
   }
   function fail(why) {
     var s = document.getElementById("splash");
@@ -120,10 +120,10 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
 <script type="module">
 /* Firebase loads ONLY from Google's official CDN (www.gstatic.com), as native ES modules.
    All three imports must use the exact same version number - if you ever change it, change all three together. */
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-storage.js";
 
 window.__kc = 1; // tells the safety net above that the app script started (so Firebase was downloaded)
 
@@ -441,7 +441,7 @@ async function enablePush(ask) {
       let ok = Notification.permission === "granted";
       if (!ok && ask) ok = (await Notification.requestPermission()) === "granted";
       if (ok) {
-        const { getMessaging, getToken } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js");
+        const { getMessaging, getToken } = await import("https://www.gstatic.com/firebasejs/11.10.0/firebase-messaging.js");
         const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js"); // must sit next to index.html
         await navigator.serviceWorker.ready;
         pushToken = await getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
