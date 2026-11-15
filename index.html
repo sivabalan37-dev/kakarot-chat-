@@ -176,8 +176,10 @@ async function login() {
     let nativeGoogle = null;
     if (native) {
       // Register the Capacitor Firebase Authentication plugin from the package included in the Android build.
-      const plugin = await import("https://esm.sh/@capacitor-firebase/authentication@7");
-      nativeGoogle = plugin.FirebaseAuthentication;
+      // This file is bundled into www/native-auth.js during the Android build.
+      // Loading the plugin through a CDN can leave the native bridge unregistered.
+      await import("./native-auth.js");
+      nativeGoogle = window.KCFirebaseAuthentication;
       if (!nativeGoogle) throw { code: "app/missing-google-plugin" };
     }
     if (nativeGoogle) { // Google sign-in must use the native dialog inside Android/iOS WebViews
