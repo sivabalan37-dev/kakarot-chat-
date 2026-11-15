@@ -1,0 +1,35 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Files are private to the two authenticated members of the matching chat.
+    match /chat_uploads/{chatId}/{uid}/{fileName} {
+      function chatMembers() {
+        return firestore.get(/databases/(default)/documents/chats/$(chatId)).data.participants;
+      }
+      function isMember() {
+        return request.auth != null && request.auth.uid in chatMembers();
+      }
+      function safeType() {
+        return request.resource.contentType.matches('image/.*')
+          || request.resource.contentType.matches('audio/.*')
+          || request.resource.contentType == 'video/mp4'
+          || request.resource.contentType == 'text/plain'
+          || request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/zip'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          || request.resource.contentType == 'application/msword'
+          || request.resource.contentType == 'application/vnd.ms-excel'
+          || request.resource.contentType == 'application/vnd.ms-powerpoint';
+      }
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.auth.uid == uid
+        && request.resource.size > 0
+        && request.resource.size <= 15 * 1024 * 1024
+        && safeType();
+      allow update, delete: if false;
+    }
+  }
+}
