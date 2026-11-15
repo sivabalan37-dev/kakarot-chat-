@@ -24,8 +24,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+      - name: Install Capacitor and native Google authentication
+        run: |
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor-firebase/authentication@7
 
       - name: Prepare web files
         run: |
@@ -37,6 +38,17 @@ jobs:
           npx cap init "Kakarot Chat" "com.kakarot.chat" --web-dir www
           npx cap add android
           npx cap sync android
+
+      - name: Configure native Firebase for Google sign-in
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+            echo "Firebase Android configuration installed."
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON_BASE64 is not set. The APK can compile, but native Google sign-in will not work until this secret is added."
+          fi
 
       - name: Build APK
         run: |
