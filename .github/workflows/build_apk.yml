@@ -70,9 +70,10 @@ jobs:
           if (!app) throw new Error('google-services.json does not contain the Android app com.kakarot.chat.');
           const clients = app.oauth_client || [];
           if (!clients.some(x => x.client_type === 1)) {
-            throw new Error('No Android OAuth client found. Add the APK signing SHA-1 in Firebase Console, then download a fresh google-services.json.');
+            console.log('::warning::Android OAuth client is not present yet. The APK will be built so its signing fingerprints can be collected. Add SHA-1 and SHA-256 in Firebase Console, then replace this file with a freshly downloaded google-services.json.');
+          } else {
+            console.log('Validated Firebase Android package and Android OAuth client.');
           }
-          console.log('Validated Firebase Android package and Android OAuth client.');
           NODE
           # Add Google's Gradle plugin for the validated Android Firebase config.
           if ! grep -q "com.google.gms:google-services" android/build.gradle; then
@@ -99,6 +100,17 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+
+      - name: Print APK signing SHA-1 and SHA-256
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::Android apksigner was not found."
+            exit 1
+          fi
+          echo "APK signing certificate fingerprints:"
+          "$APKSIGNER" verify --print-certs "$APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
