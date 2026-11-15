@@ -26,7 +26,7 @@ jobs:
 
       - name: Install Capacitor and native Google authentication
         run: |
-          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor-firebase/authentication@7 firebase@11.10.0 esbuild@0.25.0
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor-firebase/authentication@7.5.0 firebase@11.10.0 esbuild@0.25.0
 
       - name: Prepare web files and bundle native authentication bridge
         run: |
@@ -52,21 +52,34 @@ jobs:
           NODE
           npx cap sync android
 
-      - name: Configure native Firebase for Google sign-in
+      - name: Configure and validate native Firebase Google sign-in
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
-            # Add Google's Gradle plugin only when the matching Android Firebase config exists.
-            if ! grep -q "com.google.gms:google-services" android/build.gradle; then
-              sed -i "/^[[:space:]]*dependencies[[:space:]]*{/a\\    classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
-            fi
-            printf "\\napply plugin: 'com.google.gms.google-services'\\n" >> android/app/build.gradle
-            echo "Firebase Android configuration installed."
-          else
-            echo "::warning::GOOGLE_SERVICES_JSON_BASE64 is not set. The APK can compile, but native Google sign-in will not work until this secret is added."
+          # Do not publish a green APK build that cannot possibly sign in on Android.
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "::error::Missing GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add the Base64-encoded google-services.json for package com.kakarot.chat."
+            exit 1
           fi
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          node <<'NODE'
+          const fs = require('fs');
+          const c = JSON.parse(fs.readFileSync('android/app/google-services.json', 'utf8'));
+          const apps = c.client || [];
+          const app = apps.find(x => x.client_info?.android_client_info?.package_name === 'com.kakarot.chat');
+          if (!app) throw new Error('google-services.json does not contain the Android app com.kakarot.chat.');
+          const clients = app.oauth_client || [];
+          if (!clients.some(x => x.client_type === 1)) {
+            throw new Error('No Android OAuth client found. Add the APK signing SHA-1 in Firebase Console, then download a fresh google-services.json.');
+          }
+          console.log('Validated Firebase Android package and Android OAuth client.');
+          NODE
+          # Add Google's Gradle plugin for the validated Android Firebase config.
+          if ! grep -q "com.google.gms:google-services" android/build.gradle; then
+            sed -i "/^[[:space:]]*dependencies[[:space:]]*{/a\\    classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
+          fi
+          printf "\\napply plugin: 'com.google.gms.google-services'\\n" >> android/app/build.gradle
+          echo "Native Firebase Google sign-in configuration installed and validated."
 
       - name: Validate JavaScript syntax
         run: |
