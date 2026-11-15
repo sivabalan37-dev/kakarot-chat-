@@ -5,12 +5,12 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-aut
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDTH_wAVfuRL_cT2-iY3QbWK2HuEmbWCVc",
-  authDomain: "kakarot-chat-web.firebaseapp.com",
-  projectId: "kakarot-chat-web",
-  storageBucket: "kakarot-chat-web.firebasestorage.app",
-  messagingSenderId: "976639131346",
-  appId: "1:976639131346:web:4b0802ee7e58a6b801b70b"
+  apiKey: "AIzaSyAFwdmFRWWCGoej3IvEY17v_WhhaOkwtNE",
+  authDomain: "kakarot-chat.firebaseapp.com",
+  projectId: "kakarot-chat",
+  storageBucket: "kakarot-chat.firebasestorage.app",
+  messagingSenderId: "948236334962",
+  appId: "1:948236334962:web:c08f4dd1465074a09a8feb"
 };
 
 const app = initializeApp(firebaseConfig);
