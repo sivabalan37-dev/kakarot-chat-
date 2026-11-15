@@ -26,7 +26,7 @@ jobs:
 
       - name: Install Capacitor and native Google authentication
         run: |
-          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor-firebase/authentication@7
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor-firebase/authentication@7 firebase@10.14.1
 
       - name: Prepare web files
         run: |
