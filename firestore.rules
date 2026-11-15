@@ -28,7 +28,7 @@ service cloud.firestore {
         && request.resource.data.participants.size() == 2
         && request.resource.data.participants[0] != request.resource.data.participants[1]
         && request.auth.uid in request.resource.data.participants
-        && chatId.split('_').hasAll(request.resource.data.participants);
+        && chatId == request.resource.data.participants[0] + '_' + request.resource.data.participants[1];
       allow update: if signedIn()
         && request.auth.uid in resource.data.participants
         && request.resource.data.participants == resource.data.participants
@@ -55,7 +55,8 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['delivered_at', 'read_at', 'deleted_for'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['delivered_at', 'read_at'])
             || request.auth.uid == resource.data.receiver_id)
-        && request.resource.data.deleted_for.toSet().difference(resource.data.deleted_for.toSet()).hasOnly([request.auth.uid]);
+        && request.resource.data.deleted_for.toSet().difference(resource.data.deleted_for.toSet()).hasOnly([request.auth.uid])
+        && resource.data.deleted_for.toSet().difference(request.resource.data.deleted_for.toSet()).hasOnly([request.auth.uid]);
       allow delete: if false;
     }
 
