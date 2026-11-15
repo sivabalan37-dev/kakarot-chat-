@@ -54,7 +54,9 @@ jobs:
           if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
             echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
             # Add Google's Gradle plugin only when the matching Android Firebase config exists.
-            sed -i "/^dependencies {/a\\    classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
+            if ! grep -q "com.google.gms:google-services" android/build.gradle; then
+              sed -i "/^[[:space:]]*dependencies[[:space:]]*{/a\\    classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
+            fi
             printf "\\napply plugin: 'com.google.gms.google-services'\\n" >> android/app/build.gradle
             echo "Firebase Android configuration installed."
           else
