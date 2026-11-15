@@ -36,7 +36,7 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
 .rd{color:var(--ki);font-style:normal}
 .del{display:none;margin-top:6px;padding:4px 10px}
 .sel .del{display:inline-block}
-#composer{display:flex;gap:8px;padding:10px 0 14px}
+#composer{display:flex;gap:8px;padding:10px 0 14px}#composer #text{min-width:0;flex:1}.attachment-image{display:block;max-width:220px;max-height:220px;border-radius:10px;margin-top:6px}.b a{color:var(--ki);text-decoration:none}.b a:hover{text-decoration:underline}
 .menu{position:relative}
 .menu summary{cursor:pointer;padding:8px 12px;list-style:none}
 .menu>div{position:absolute;right:0;top:100%;z-index:2;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;display:grid;gap:4px;min-width:150px}
@@ -80,7 +80,7 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
     </details>
   </header>
   <div id="msgs"></div>
-  <form id="composer"><input id="text" placeholder="Type a message" autocomplete="off" maxlength="4000"><button id="sendBtn" class="pri">Send</button></form>
+  <form id="composer"><button type="button" id="attachBtn" aria-label="Attach a file">＋</button><input id="fileInput" type="file" hidden accept="image/*,application/pdf,text/plain,audio/*,video/mp4,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"><input id="text" placeholder="Type a message" autocomplete="off" maxlength="4000"><button id="sendBtn" class="pri">Send</button></form>
 </main>
 
 <main id="profile" class="screen" hidden>
@@ -123,6 +123,7 @@ small{display:block;color:var(--mut);overflow:hidden;text-overflow:ellipsis;whit
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, orderBy, startAt, endAt, limit, onSnapshot, getDocs, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js";
 
 window.__kc = 1; // tells the safety net above that the app script started (so Firebase was downloaded)
 
@@ -138,11 +139,12 @@ const firebaseConfig = {
   appId: "1:948236334962:web:c08f4dd1465074a09a8feb"
 };
 
-let app, auth, db, provider;
+let app, auth, db, provider, storage;
 function initFirebase() { // ONE app; Auth and Firestore are both created from that same app
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
   provider = new GoogleAuthProvider();
 }
 
@@ -171,11 +173,18 @@ async function login() {
   try {
     const cap = window.Capacitor;
     const native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
-    const nativeGoogle = native && cap.isPluginAvailable("FirebaseAuthentication") && cap.Plugins.FirebaseAuthentication;
-    if (native && !nativeGoogle) throw { code: "app/missing-google-plugin" }; // inside the app, Google sign-in cannot finish without the native plugin
-    if (nativeGoogle) { // Google blocks sign-in popups inside Android/iOS WebViews, so the app uses the native Google dialog
+    let nativeGoogle = null;
+    if (native) {
+      // Register the Capacitor Firebase Authentication plugin from the package included in the Android build.
+      const plugin = await import("https://esm.sh/@capacitor-firebase/authentication@7");
+      nativeGoogle = plugin.FirebaseAuthentication;
+      if (!nativeGoogle) throw { code: "app/missing-google-plugin" };
+    }
+    if (nativeGoogle) { // Google sign-in must use the native dialog inside Android/iOS WebViews
       const r = await nativeGoogle.signInWithGoogle({ skipNativeAuth: true });
-      await signInWithCredential(auth, GoogleAuthProvider.credential(r.credential.idToken));
+      const idToken = r && r.credential && r.credential.idToken;
+      if (!idToken) throw new Error("Google sign-in did not return an ID token. Check the Android Firebase configuration.");
+      await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
     } else {
       await signInWithPopup(auth, provider); // first thing the tap does, or browsers block the popup
     }
@@ -312,8 +321,16 @@ function renderMsgs(s, c) {
 
 function bubble(m) {
   const mine = m.sender_id === me.uid;
+  let body;
+  if (m.attachment_url) {
+    const label = m.attachment_name || m.text || "Open attachment";
+    const link = h("a", { href: m.attachment_url, target: "_blank", rel: "noopener noreferrer" });
+    if ((m.attachment_type || "").startsWith("image/")) link.append(h("img", { class: "attachment-image", src: m.attachment_url, alt: label, loading: "lazy" }));
+    link.append(h("span", {}, "📎 " + label));
+    body = link;
+  } else body = h("span", {}, m.text);
   return h("div", { class: "b " + (mine ? "me" : "them"), onclick: (e) => e.currentTarget.classList.toggle("sel") },
-    h("span", {}, m.text),
+    body,
     h("small", {}, clock(m.sent_at), mine ? h("i", { class: m.read_at ? "rd" : "" }, m.read_at || m.delivered_at ? " ✓✓" : " ✓") : null),
     h("button", { class: "del", onclick: (e) => { e.stopPropagation(); updateDoc(m.ref, { deleted_for: arrayUnion(me.uid) }).catch(() => toast("Could not delete. Please try again.")); } }, "Delete for me"));
 }
@@ -335,6 +352,51 @@ $("#composer").addEventListener("submit", async (e) => {
     await setDoc(ref, { message_id: ref.id, chat_id: c.chat_id, sender_id: me.uid, receiver_id: c.p.user_id, text, attachment_url: "", sent_at: now, delivered_at: null, read_at: null, deleted_for: [] });
     if (!fresh) await updateDoc(chatRef, meta);
   } catch { inp.value = text; toast("Message not sent. Check your connection and try again."); }
+});
+
+
+/* ---------- File and image attachments (Firebase Storage) ---------- */
+const fileInput = $("#fileInput");
+$("#attachBtn").onclick = () => { if (cur && !cur.blocked) fileInput.click(); };
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files && fileInput.files[0];
+  fileInput.value = "";
+  const c = cur;
+  if (!file || !c || c.blocked) return;
+  const blockedExt = /\.(exe|apk|bat|cmd|com|msi|mjs|js|html?|jar|sh|ps1|vbs|dmg)$/i;
+  if (blockedExt.test(file.name)) return toast("That file type is not allowed.");
+  if (file.size > 15 * 1024 * 1024) return toast("Files must be 15 MB or smaller.");
+  if (!file.size) return toast("This file is empty.");
+  const button = $("#attachBtn");
+  button.disabled = true;
+  try {
+    const chatRef = doc(db, "chats", c.chat_id);
+    const now = serverTimestamp();
+    if (!c.exists) {
+      await setDoc(chatRef, { chat_id: c.chat_id, participants: [me.uid, c.p.user_id].sort(), created_at: now, last_message_at: now, last_message_text: "Attachment" });
+      c.exists = true;
+      listen(c);
+    }
+    const safeName = file.name.replace(/[^\w.() -]/g, "_").slice(0, 100) || "file";
+    const objectPath = "chat_uploads/" + c.chat_id + "/" + me.uid + "/" + crypto.randomUUID() + "_" + safeName;
+    const target = storageRef(storage, objectPath);
+    toast("Uploading " + safeName + "…");
+    await uploadBytes(target, file, { contentType: file.type || "application/octet-stream" });
+    const url = await getDownloadURL(target);
+    const msgRef = doc(collection(db, "messages"));
+    const label = "📎 " + safeName;
+    await setDoc(msgRef, {
+      message_id: msgRef.id, chat_id: c.chat_id, sender_id: me.uid, receiver_id: c.p.user_id,
+      text: label, attachment_url: url, attachment_name: safeName,
+      attachment_type: file.type || "application/octet-stream", attachment_size: file.size,
+      sent_at: now, delivered_at: null, read_at: null, deleted_for: []
+    });
+    await updateDoc(chatRef, { last_message_at: now, last_message_text: label.slice(0, 200) });
+    toast("Attachment sent.");
+  } catch (e) {
+    console.error("Attachment upload failed:", e);
+    toast("File upload failed. Check Firebase Storage is enabled and its rules are deployed.");
+  } finally { button.disabled = false; }
 });
 
 $("#back").onclick = () => { closeChat(); show("home"); };
