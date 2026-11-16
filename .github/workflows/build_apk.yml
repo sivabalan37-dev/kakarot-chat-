@@ -61,10 +61,28 @@ jobs:
             echo "::error::Missing GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add the Base64-encoded google-services.json for package com.kakarot.chat."
             exit 1
           fi
-          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          # Accept either the raw Firebase JSON file or its Base64-encoded contents.
           node <<'NODE'
           const fs = require('fs');
-          const c = JSON.parse(fs.readFileSync('android/app/google-services.json', 'utf8'));
+          const value = process.env.GOOGLE_SERVICES_JSON_BASE64.trim();
+          let jsonText;
+          if (value.startsWith('{')) {
+            jsonText = value;
+          } else {
+            const compact = value.replace(/\\s+/g, '');
+            if (!/^[A-Za-z0-9+/]+={0,2}$/.test(compact) || compact.length % 4 === 1) {
+              throw new Error('GOOGLE_SERVICES_JSON_BASE64 is not valid standard Base64. Recreate the secret from the downloaded google-services.json file.');
+            }
+            jsonText = Buffer.from(compact, 'base64').toString('utf8');
+          }
+          let c;
+          try {
+            c = JSON.parse(jsonText);
+          } catch {
+            throw new Error('Firebase config secret did not decode to valid JSON. Copy the complete Base64 output, or store the raw google-services.json contents.');
+          }
+          fs.writeFileSync('android/app/google-services.json', JSON.stringify(c, null, 2));
+          
           const apps = c.client || [];
           const app = apps.find(x => x.client_info?.android_client_info?.package_name === 'com.kakarot.chat');
           if (!app) throw new Error('google-services.json does not contain the Android app com.kakarot.chat.');
