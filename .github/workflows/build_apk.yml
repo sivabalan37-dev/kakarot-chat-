@@ -65,7 +65,9 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           let value = process.env.GOOGLE_SERVICES_JSON_BASE64.replace(/^\uFEFF/, '').trim();
-          // Accept raw JSON, standard Base64, and URL-safe Base64 without exposing the secret.
+          // Accept raw JSON, quoted JSON, standard Base64, URL-safe Base64,
+          // and Base64 copied with line wraps or PEM-style header/footer text.
+          value = value.replace(/^base64:/i, '').trim();
           if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
             value = value.slice(1, -1).trim();
           }
@@ -73,9 +75,13 @@ jobs:
           if (value.startsWith('{')) {
             jsonText = value;
           } else {
-            const compact = value.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
-            if (!/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 === 1) {
-              throw new Error('Firebase config secret is neither raw JSON nor valid Base64. Recreate it from the downloaded google-services.json file.');
+            const compact = value
+              .replace(/-----BEGIN [^-]+-----|-----END [^-]+-----/g, '')
+              .replace(/-/g, '+').replace(/_/g, '/')
+              .replace(/[^A-Za-z0-9+/=]/g, '')
+              .replace(/=+$/, '');
+            if (!compact || compact.length % 4 === 1) {
+              throw new Error('Firebase config secret is empty or cannot be decoded as Base64. Use the complete google-services.json contents or its Base64 encoding.');
             }
             const padded = compact + '='.repeat((4 - compact.length % 4) % 4);
             jsonText = Buffer.from(padded, 'base64').toString('utf8').replace(/^\uFEFF/, '').trim();
