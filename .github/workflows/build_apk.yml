@@ -69,7 +69,7 @@ jobs:
           if (value.startsWith('{')) {
             jsonText = value;
           } else {
-            const compact = value.replace(/\\s+/g, '');
+            const compact = value.replace(/\s+/g, '');
             if (!/^[A-Za-z0-9+/]+={0,2}$/.test(compact) || compact.length % 4 === 1) {
               throw new Error('GOOGLE_SERVICES_JSON_BASE64 is not valid standard Base64. Recreate the secret from the downloaded google-services.json file.');
             }
