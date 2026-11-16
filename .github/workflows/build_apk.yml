@@ -61,37 +61,53 @@ jobs:
             echo "::error::Missing GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add the Base64-encoded google-services.json for package com.kakarot.chat."
             exit 1
           fi
-          # Accept either the raw Firebase JSON file or its Base64-encoded contents.
+          # Decode raw JSON, data-URI JSON, or one/two layers of Base64 without logging the secret.
           node <<'NODE'
           const fs = require('fs');
-          let value = process.env.GOOGLE_SERVICES_JSON_BASE64.replace(/^\uFEFF/, '').trim();
-          // Accept raw JSON, quoted JSON, standard Base64, URL-safe Base64,
-          // and Base64 copied with line wraps or PEM-style header/footer text.
-          value = value.replace(/^base64:/i, '').trim();
-          if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-            value = value.slice(1, -1).trim();
-          }
-          let jsonText;
-          if (value.startsWith('{')) {
-            jsonText = value;
-          } else {
-            const compact = value
-              .replace(/-----BEGIN [^-]+-----|-----END [^-]+-----/g, '')
-              .replace(/-/g, '+').replace(/_/g, '/')
-              .replace(/[^A-Za-z0-9+/=]/g, '')
-              .replace(/=+$/, '');
-            if (!compact || compact.length % 4 === 1) {
-              throw new Error('Firebase config secret is empty or cannot be decoded as Base64. Use the complete google-services.json contents or its Base64 encoding.');
+          const { TextDecoder } = require('util');
+          const original = process.env.GOOGLE_SERVICES_JSON_BASE64 || '';
+          let candidate = original.replace(/^\\uFEFF/, '').trim();
+          candidate = candidate.replace(/^base64:/i, '').trim();
+          candidate = candidate.replace(/^data:[^,]*;base64,/i, '').trim();
+          candidate = candidate.replace(/^\x60{3}(?:json)?\\s*|\\s*\x60{3}$/g, '').trim();
+          const decodedLengths = [];
+          let config = null;
+          let current = candidate;
+          for (let layer = 0; layer <= 2; layer++) {
+            if ((current.startsWith('"') && current.endsWith('"'))) {
+              try {
+                const unquoted = JSON.parse(current);
+                if (typeof unquoted === 'string') current = unquoted.trim();
+              } catch {}
             }
-            const padded = compact + '='.repeat((4 - compact.length % 4) % 4);
-            jsonText = Buffer.from(padded, 'base64').toString('utf8').replace(/^\uFEFF/, '').trim();
+            try {
+              const parsed = JSON.parse(current);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                config = parsed;
+                break;
+              }
+            } catch {}
+            if (layer === 2) break;
+            const compact = current.replace(/\\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+            if (!compact || !/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 === 1) break;
+            const unpadded = compact.replace(/=+$/, '');
+            const padded = unpadded + '='.repeat((4 - unpadded.length % 4) % 4);
+            const bytes = Buffer.from(padded, 'base64');
+            const canonical = bytes.toString('base64').replace(/=+$/, '');
+            if (canonical !== unpadded) break;
+            try {
+              current = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\\uFEFF/, '').trim();
+            } catch {
+              decodedLengths.push('invalid-utf8');
+              break;
+            }
+            decodedLengths.push(current.length);
           }
-          let c;
-          try {
-            c = JSON.parse(jsonText);
-          } catch {
-            throw new Error('Firebase config secret did not decode to valid JSON. Copy the complete Base64 output, or store the raw google-services.json contents.');
+          if (!config) {
+            const stages = decodedLengths.length ? decodedLengths.join(',') : 'none';
+            throw new Error('Firebase secret is present but did not produce a JSON object. Safe diagnostics: input_chars=' + original.length + ', decoded_text_lengths=' + stages + '. Replace the secret with the complete google-services.json file encoded exactly once using: base64 -w 0 google-services.json. Do not paste the secret into chat or logs.');
           }
+          const c = config;
           fs.writeFileSync('android/app/google-services.json', JSON.stringify(c, null, 2));
           
           const apps = c.client || [];
