@@ -66,10 +66,10 @@ jobs:
           const fs = require('fs');
           const { TextDecoder } = require('util');
           const original = process.env.GOOGLE_SERVICES_JSON_BASE64 || '';
-          let candidate = original.replace(/^\\uFEFF/, '').trim();
+          let candidate = original.replace(/^\uFEFF/, '').trim();
           candidate = candidate.replace(/^base64:/i, '').trim();
           candidate = candidate.replace(/^data:[^,]*;base64,/i, '').trim();
-          candidate = candidate.replace(/^\x60{3}(?:json)?\\s*|\\s*\x60{3}$/g, '').trim();
+          candidate = candidate.replace(/^\x60{3}(?:json)?\s*|\s*\x60{3}$/g, '').trim();
           const decodedLengths = [];
           let config = null;
           let current = candidate;
@@ -88,7 +88,7 @@ jobs:
               }
             } catch {}
             if (layer === 2) break;
-            const compact = current.replace(/\\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+            const compact = current.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
             if (!compact || !/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 === 1) break;
             const unpadded = compact.replace(/=+$/, '');
             const padded = unpadded + '='.repeat((4 - unpadded.length % 4) % 4);
@@ -96,7 +96,7 @@ jobs:
             const canonical = bytes.toString('base64').replace(/=+$/, '');
             if (canonical !== unpadded) break;
             try {
-              current = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\\uFEFF/, '').trim();
+              current = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').trim();
             } catch {
               decodedLengths.push('invalid-utf8');
               break;
