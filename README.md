@@ -29,10 +29,14 @@ The attachment feature stores files in Firebase Storage under `chat_uploads/{cha
 The Android build includes `@capacitor-firebase/authentication`. Native Google sign-in also needs the Android Firebase app registered in Firebase Console:
 
 1. Add an Android app with package name `com.kakarot.chat`.
-2. Add the SHA-1 and SHA-256 signing fingerprints for the signing key used by the APK.
-3. Download that app's `google-services.json`.
-4. Base64-encode the file and add it to GitHub Actions secrets as `GOOGLE_SERVICES_JSON_BASE64`.
-5. Re-run the **Build Android APK** workflow.
+2. Add the SHA-1 and SHA-256 signing fingerprints for the signing key used by the APK. For Google Play releases, also add the Play app-signing certificate fingerprints.
+3. Enable **Authentication → Sign-in method → Google** in Firebase.
+4. Download a fresh `google-services.json` for the Android app after adding the fingerprints.
+5. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret**. Add a secret named `GOOGLE_SERVICES_JSON` and paste the complete contents of the downloaded JSON file as its value. The workflow now accepts the raw JSON directly.
+   - Alternatively, keep using `GOOGLE_SERVICES_JSON_BASE64`: encode the complete file with `base64 -w 0 google-services.json` and save that one-line output as the secret value.
+6. Re-run the **Build Android APK** workflow.
+
+Do not paste this configuration into chat, and do not commit `google-services.json` to the repository. The workflow validates the Firebase project ID, Android package name, and Android OAuth client before building.
 
 Without that Android configuration, the APK may compile but native Google sign-in will not complete. The web app continues to use Firebase Google popup sign-in on supported browsers.
 
