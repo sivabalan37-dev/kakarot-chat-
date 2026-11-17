@@ -58,71 +58,103 @@ jobs:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
           # Keep native sign-in validation strict; never publish an APK that cannot authenticate.
-          # Prefer raw JSON, while retaining support for the existing Base64 secret.
+          # Try raw JSON and Base64 secrets independently; a malformed raw value must not hide a valid Base64 value.
           node <<'NODE'
           const fs = require('fs');
           const { TextDecoder } = require('util');
-          const rawJson = (process.env.GOOGLE_SERVICES_JSON || '').replace(/^\uFEFF/, '').trim();
-          const base64Secret = (process.env.GOOGLE_SERVICES_JSON_BASE64 || '').trim();
-          const original = rawJson || base64Secret;
-          if (!original) {
-            throw new Error('Missing GitHub Actions secret. Add GOOGLE_SERVICES_JSON (recommended: full google-services.json contents) or GOOGLE_SERVICES_JSON_BASE64 (Base64-encoded file) for package com.kakarot.chat.');
+
+          const secrets = [
+            ['GOOGLE_SERVICES_JSON', (process.env.GOOGLE_SERVICES_JSON || '').trim()],
+            ['GOOGLE_SERVICES_JSON_BASE64', (process.env.GOOGLE_SERVICES_JSON_BASE64 || '').trim()]
+          ].filter(([, value]) => value.length > 0);
+
+          if (secrets.length === 0) {
+            throw new Error('Missing GitHub Actions secret. Add the complete google-services.json as GOOGLE_SERVICES_JSON or encode the complete file once and add it as GOOGLE_SERVICES_JSON_BASE64.');
           }
-          // Accept a raw JSON file, data-URI JSON, or one/two Base64 layers without logging secrets.
-          let candidate = original.replace(/^\uFEFF/, '').trim();
-          candidate = candidate.replace(/^base64:/i, '').trim();
-          candidate = candidate.replace(/^data:[^,]*;base64,/i, '').trim();
-          candidate = candidate.replace(/^\x60{3}(?:json)?\s*|\s*\x60{3}$/g, '').trim();
-          const decodedLengths = [];
-          let config = null;
-          let current = candidate;
-          for (let layer = 0; layer <= 2; layer++) {
-            if ((current.startsWith('"') && current.endsWith('"'))) {
+
+          function parseSecret(input) {
+            let current = input.replace(/^\uFEFF/, '').trim();
+            current = current.replace(/^base64:/i, '').trim();
+            current = current.replace(/^data:[^,]*;base64,/i, '').trim();
+            current = current.replace(/^\x60{3}(?:json)?\s*|\s*\x60{3}$/g, '').trim();
+
+            const decodedLengths = [];
+            for (let layer = 0; layer <= 2; layer++) {
+              if (current.startsWith('"') && current.endsWith('"')) {
+                try {
+                  const unquoted = JSON.parse(current);
+                  if (typeof unquoted === 'string') current = unquoted.trim();
+                } catch {}
+              }
+
               try {
-                const unquoted = JSON.parse(current);
-                if (typeof unquoted === 'string') current = unquoted.trim();
+                const parsed = JSON.parse(current);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  return { config: parsed, decodedLengths };
+                }
               } catch {}
-            }
-            try {
-              const parsed = JSON.parse(current);
-              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                config = parsed;
+
+              if (layer === 2) break;
+              const compact = current.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+              if (!compact || !/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 === 1) break;
+
+              const unpadded = compact.replace(/=+$/, '');
+              const padded = unpadded + '='.repeat((4 - unpadded.length % 4) % 4);
+              const bytes = Buffer.from(padded, 'base64');
+              const canonical = bytes.toString('base64').replace(/=+$/, '');
+              if (canonical !== unpadded) break;
+
+              try {
+                current = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').trim();
+                decodedLengths.push(current.length);
+              } catch {
+                decodedLengths.push('invalid-utf8');
                 break;
               }
-            } catch {}
-            if (layer === 2) break;
-            const compact = current.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
-            if (!compact || !/^[A-Za-z0-9+/]*={0,2}$/.test(compact) || compact.length % 4 === 1) break;
-            const unpadded = compact.replace(/=+$/, '');
-            const padded = unpadded + '='.repeat((4 - unpadded.length % 4) % 4);
-            const bytes = Buffer.from(padded, 'base64');
-            const canonical = bytes.toString('base64').replace(/=+$/, '');
-            if (canonical !== unpadded) break;
-            try {
-              current = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '').trim();
-            } catch {
-              decodedLengths.push('invalid-utf8');
-              break;
             }
-            decodedLengths.push(current.length);
+            return { config: null, decodedLengths };
           }
-          if (!config) {
-            const stages = decodedLengths.length ? decodedLengths.join(',') : 'none';
-            throw new Error('Firebase secret is present but did not produce a JSON object. Safe diagnostics: input_chars=' + original.length + ', decoded_text_lengths=' + stages + '. Replace the secret with the complete google-services.json file encoded exactly once using: base64 -w 0 google-services.json. Do not paste the secret into chat or logs.');
+
+          function validateFirebaseConfig(config) {
+            if (config.project_info?.project_id !== 'kakarot-chat') {
+              return 'wrong Firebase project; expected kakarot-chat';
+            }
+            const apps = Array.isArray(config.client) ? config.client : [];
+            const app = apps.find(x => x.client_info?.android_client_info?.package_name === 'com.kakarot.chat');
+            if (!app) return 'missing Android app package com.kakarot.chat';
+            const clients = Array.isArray(app.oauth_client) ? app.oauth_client : [];
+            if (!clients.some(x => x.client_type === 1)) {
+              return 'missing Android OAuth client (client_type 1); register the APK signing SHA-1 in Firebase and download a fresh config';
+            }
+            return null;
           }
-          const c = config;
-          if (c.project_info?.project_id !== 'kakarot-chat') {
-            throw new Error('google-services.json belongs to a different Firebase project. Expected project kakarot-chat.');
+
+          let selectedConfig = null;
+          const diagnostics = [];
+          for (const [name, value] of secrets) {
+            const parsed = parseSecret(value);
+            if (!parsed.config) {
+              const stages = parsed.decodedLengths.length ? parsed.decodedLengths.join(',') : 'none';
+              diagnostics.push(name + ': input_chars=' + value.length + ', decoded_text_lengths=' + stages + ', not valid JSON/Base64');
+              continue;
+            }
+
+            const problem = validateFirebaseConfig(parsed.config);
+            if (problem) {
+              diagnostics.push(name + ': ' + problem);
+              continue;
+            }
+
+            selectedConfig = parsed.config;
+            console.log('Validated Firebase project, Android package, and Android OAuth client using ' + name + '.');
+            break;
           }
-          const apps = c.client || [];
-          const app = apps.find(x => x.client_info?.android_client_info?.package_name === 'com.kakarot.chat');
-          if (!app) throw new Error('google-services.json does not contain the Android app com.kakarot.chat.');
-          const clients = app.oauth_client || [];
-          if (!clients.some(x => x.client_type === 1)) {
-            throw new Error('google-services.json is missing an Android OAuth client (client_type 1). Register SHA-1 in Firebase, enable Google sign-in, and download a fresh Firebase config.');
+
+          if (!selectedConfig) {
+            throw new Error('No supplied Firebase secret passed validation. Safe diagnostics: ' + diagnostics.join(' | ') + '. Set GOOGLE_SERVICES_JSON to the entire downloaded google-services.json contents, or set GOOGLE_SERVICES_JSON_BASE64 to the complete file encoded once with: base64 -w 0 google-services.json. Do not paste the secret into chat or logs.');
           }
-          fs.writeFileSync('android/app/google-services.json', JSON.stringify(c, null, 2));
-          console.log('Validated Firebase project, Android package, and Android OAuth client.');
+
+          fs.writeFileSync('android/app/google-services.json', JSON.stringify(selectedConfig, null, 2));
           NODE
           # Add Google's Gradle plugin for the validated Android Firebase config.
           if ! grep -q "com.google.gms:google-services" android/build.gradle; then
