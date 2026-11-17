@@ -54,19 +54,22 @@ jobs:
 
       - name: Configure and validate native Firebase Google sign-in
         env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
-          # Do not publish a green APK build that cannot possibly sign in on Android.
-          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo "::error::Missing GitHub Actions secret GOOGLE_SERVICES_JSON_BASE64. Add the Base64-encoded google-services.json for package com.kakarot.chat."
-            exit 1
-          fi
-          # Decode raw JSON, data-URI JSON, or one/two layers of Base64 without logging the secret.
+          # Keep native sign-in validation strict; never publish an APK that cannot authenticate.
+          # Prefer raw JSON, while retaining support for the existing Base64 secret.
           node <<'NODE'
           const fs = require('fs');
           const { TextDecoder } = require('util');
-          const original = process.env.GOOGLE_SERVICES_JSON_BASE64 || '';
-          let candidate = original.replace(/^\uFEFF/, '').trim();
+          const rawJson = (process.env.GOOGLE_SERVICES_JSON || '').replace(/^\\uFEFF/, '').trim();
+          const base64Secret = (process.env.GOOGLE_SERVICES_JSON_BASE64 || '').trim();
+          const original = rawJson || base64Secret;
+          if (!original) {
+            throw new Error('Missing GitHub Actions secret. Add GOOGLE_SERVICES_JSON (recommended: full google-services.json contents) or GOOGLE_SERVICES_JSON_BASE64 (Base64-encoded file) for package com.kakarot.chat.');
+          }
+          // Accept a raw JSON file, data-URI JSON, or one/two Base64 layers without logging secrets.
+          let candidate = original.replace(/^\\uFEFF/, '').trim();
           candidate = candidate.replace(/^base64:/i, '').trim();
           candidate = candidate.replace(/^data:[^,]*;base64,/i, '').trim();
           candidate = candidate.replace(/^\x60{3}(?:json)?\s*|\s*\x60{3}$/g, '').trim();
@@ -108,16 +111,18 @@ jobs:
             throw new Error('Firebase secret is present but did not produce a JSON object. Safe diagnostics: input_chars=' + original.length + ', decoded_text_lengths=' + stages + '. Replace the secret with the complete google-services.json file encoded exactly once using: base64 -w 0 google-services.json. Do not paste the secret into chat or logs.');
           }
           const c = config;
-          fs.writeFileSync('android/app/google-services.json', JSON.stringify(c, null, 2));
-          
+          if (c.project_info?.project_id !== 'kakarot-chat') {
+            throw new Error('google-services.json belongs to a different Firebase project. Expected project kakarot-chat.');
+          }
           const apps = c.client || [];
           const app = apps.find(x => x.client_info?.android_client_info?.package_name === 'com.kakarot.chat');
           if (!app) throw new Error('google-services.json does not contain the Android app com.kakarot.chat.');
           const clients = app.oauth_client || [];
           if (!clients.some(x => x.client_type === 1)) {
-            throw new Error('google-services.json is missing an Android OAuth client (client_type 1). Enable Google sign-in and download a fresh Firebase config.');
+            throw new Error('google-services.json is missing an Android OAuth client (client_type 1). Register SHA-1 in Firebase, enable Google sign-in, and download a fresh Firebase config.');
           }
-          console.log('Validated Firebase Android package and Android OAuth client.');
+          fs.writeFileSync('android/app/google-services.json', JSON.stringify(c, null, 2));
+          console.log('Validated Firebase project, Android package, and Android OAuth client.');
           NODE
           # Add Google's Gradle plugin for the validated Android Firebase config.
           if ! grep -q "com.google.gms:google-services" android/build.gradle; then
