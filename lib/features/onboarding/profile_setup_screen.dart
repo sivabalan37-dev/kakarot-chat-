@@ -30,12 +30,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   bool _saving = false;
   bool _showPassword = false;
   bool _showConfirm = false;
+  bool _passwordAlreadyLinked = false;
   String? _availabilityMessage;
 
   @override
   void initState() {
     super.initState();
     _displayName.text = widget.user.displayName ?? '';
+    _passwordAlreadyLinked = widget.user.providerData.any(
+      (item) => item.providerId == EmailAuthProvider.PROVIDER_ID,
+    );
     _username.addListener(_onUsernameChanged);
   }
 
@@ -83,12 +87,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
-    if (!PasswordValidator.isStrong(_password.text)) return;
-    if (_password.text != _confirmPassword.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match.')),
-      );
-      return;
+    if (!_passwordAlreadyLinked) {
+      if (!PasswordValidator.isStrong(_password.text)) return;
+      if (_password.text != _confirmPassword.text) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Passwords do not match.')),
+        );
+        return;
+      }
     }
 
     setState(() => _saving = true);
@@ -116,6 +122,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         await user.linkWithCredential(credential);
         await user.reload();
         user = FirebaseAuth.instance.currentUser;
+        if (mounted) setState(() => _passwordAlreadyLinked = true);
       }
 
       await _service.completeProfile(
@@ -148,6 +155,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } catch (_) {
+      // Detect a successful password link followed by a failed profile write.
+      // On retry, the user should choose only a username, not a second password.
+      try {
+        await FirebaseAuth.instance.currentUser?.reload();
+        final refreshed = FirebaseAuth.instance.currentUser;
+        final linked = refreshed?.providerData.any(
+              (item) => item.providerId == EmailAuthProvider.PROVIDER_ID,
+            ) ??
+            false;
+        if (mounted && linked) setState(() => _passwordAlreadyLinked = true);
+      } catch (_) {
+        // Keep the generic user-facing error; never print credential details.
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not save your profile. Please try again.')),
@@ -197,7 +217,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       controller: _username,
                       decoration: const InputDecoration(labelText: 'Username', hintText: 'example_01', border: OutlineInputBorder()),
                       autocorrect: false,
-                      validator: UsernameValidator.validate,
+                      validator: (value) => UsernameValidator.validate(value ?? ''),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -217,6 +237,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (!_passwordAlreadyLinked) ...[
                     TextFormField(
                       controller: _password,
                       obscureText: !_showPassword,
@@ -256,6 +277,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       ),
                       validator: (value) => value == _password.text ? null : 'Passwords do not match.',
                     ),
+
+                    ],
                     const SizedBox(height: 22),
                     FilledButton(
                       onPressed: _saving ? null : _save,
