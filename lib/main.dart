@@ -1,14 +1,11 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-
 import 'app/kakarot_app.dart';
+import 'services/google_auth_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Android Firebase options are loaded from the native
-  // google-services.json configuration. Never commit private credentials.
   await Firebase.initializeApp();
-
+  await GoogleAuthService.instance.initialize();
   runApp(const KakarotApp());
 }
