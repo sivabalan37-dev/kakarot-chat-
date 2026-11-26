@@ -29,7 +29,7 @@ class ChatHomeScreen extends StatelessWidget {
             children: [
               const KakarotBrand(size: 84),
               const SizedBox(height: 20),
-              Text("Welcome, \${user?.displayName ?? 'Kakarot user'}"),
+              Text("Welcome, ${user?.displayName ?? 'Kakarot user'}"),
               const SizedBox(height: 8),
               const Text(
                 'Profile setup is connected. Existing conversations are not yet wired into this Flutter screen.',
