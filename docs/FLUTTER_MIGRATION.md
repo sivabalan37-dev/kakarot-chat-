@@ -1,40 +1,45 @@
-# Kakarot Chat Flutter migration
+# Flutter migration implementation notes
 
-## Safety boundary
+## Current implementation
 
-- Work on `flutter-migration`; do not replace `main` during migration.
-- Keep Firebase project `kakarot-chat` and Android application ID `com.kakarot.chat`.
-- Do not delete, rename, bulk-rewrite, or recreate Firebase Authentication users.
-- Preserve Firebase UIDs, chat IDs, message document IDs, Storage object paths, and attachment URLs.
-- Do not deploy changed Firestore or Storage rules until they have been compared with the production rules and tested in the Firebase Emulator Suite.
-- Never put service-account credentials, OAuth client secrets, signing keys, passwords, or tokens in source control.
+- Flutter app shell and dark theme.
+- Firebase initialization.
+- Google sign-in using google_sign_in 7.x with Firebase Auth credential sign-in.
+- Auth state gate reading `profiles/{uid}`.
+- First-run profile setup with Google display name/photo defaults, custom display name, unique username check, password strength checks, confirmation, and `linkWithCredential`.
+- Username availability and profile completion callable Cloud Functions.
+- Atomic username reservation and private username-to-email mapping in a Firestore transaction.
+- Username and complete-profile callable rate limits.
+- App Check activation: debug provider in debug builds, Play Integrity in release builds.
+- Flutter Android CI workflow builds a debug APK and uploads it as an artifact.
+- Original orange-orb/constellation/chat-bubble brand mark drawn in Flutter; it is not a reproduction of a franchise logo.
 
-## Current scaffold
+## Not implemented yet
 
-This branch contains an isolated Flutter application foundation. It is intentionally not wired to production sign-in or production Firestore yet. The visible screen states this explicitly; it must not be presented as a working replacement APK.
+- Username/password sign-in broker.
+- Forgot password and change password UI.
+- Username change with reauthentication/cooldown.
+- Existing chat list, message timeline, sending, receipts, unread counts, typing, presence.
+- Pinned/archived chats, message search.
+- Storage uploads, voice notes, compression and attachment previews.
+- FCM registration and push delivery.
+- Account deletion flow.
+- Full Firestore Emulator Suite and device tests.
+- Signed release build.
 
-## Required migration gates
+## Important rollout requirements
 
-1. Inventory the complete Firestore schema, subcollections, indexes, Storage paths, Cloud Functions, Authentication providers, and current security rules.
-2. Back up Firestore and inventory Storage objects before any production data changes.
-3. Configure Android Firebase using the existing Firebase Android app registration and a valid `google-services.json` for package `com.kakarot.chat`. Do not commit that file if repository policy treats it as sensitive; supply it through protected build configuration.
-4. Implement Google sign-in and prove an existing test account returns exactly the same Firebase UID. Do not introduce a second Firebase project.
-5. Implement read-only adapters for legacy `users`, `profiles`, `chats`, `messages`, and Storage paths. Verify actual document shapes before writing any migration.
-6. Add profile backfill as an explicit, idempotent, owner-scoped operation. Do not assume the empty `profiles` collection means user accounts are absent.
-7. Add linked email/password credentials with `linkWithCredential` only for the currently authenticated Google user. Never create duplicate users.
-8. Add username reservation through a trusted server transaction and private username-to-email mapping. Do not let clients write private mappings.
-9. Port chat features incrementally while retaining legacy document identifiers and compatible fields.
-10. Run emulator tests, two-device end-to-end tests, debug and release builds before considering a rollout.
-
-## Data compatibility questions to resolve from the full source
-
-- Exact participant field names and chat ID generation.
-- Message sender, timestamp, attachment, status, and read-receipt field names.
-- Existing blocked-user subcollection format.
-- Existing Storage metadata and access rules.
-- Existing FCM token and notification payload format.
-- Whether presence currently uses Firestore, Realtime Database, or another mechanism.
+1. Back up Firestore and inventory Storage objects before any production changes.
+2. Enable Email/Password in the existing Firebase project while leaving Google enabled.
+3. Verify the current Android Firebase app has the correct package and OAuth client entries.
+4. Configure/register App Check debug and Play Integrity for the existing Android app.
+5. Deploy functions to staging and test race conditions, rate limits and App Check.
+6. Verify existing Google sign-in yields the same UID as the Capacitor app.
+7. Verify a linked password provider belongs to that same UID.
+8. Test that profile completion produces the expected profile document and valid SHA-256 email hash.
+9. Verify the existing JavaScript app remains compatible with any rules changes.
+10. Port the existing Firestore chat/message schema read-only first, then write only backward-compatible data.
 
 ## Release rule
 
-Do not merge this branch into `main`, deploy rules, or distribute its APK as a replacement until all migration gates and acceptance tests pass.
+No merge to production `main`, no production rules deployment, and no replacement APK until all migration gates and acceptance tests pass.

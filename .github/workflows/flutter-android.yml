@@ -1,0 +1,111 @@
+name: Flutter Android Migration CI
+
+on:
+  push:
+    branches: [ flutter-migration ]
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec.yaml'
+      - 'functions/**'
+      - 'firebase.json'
+      - '.github/workflows/flutter-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform project
+        run: flutter create --platforms=android --org com.kakarot --project-name chat --no-pub .
+
+      - name: Configure Firebase Android app
+        id: firebase_config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const raw = (process.env.GOOGLE_SERVICES_JSON || '').trim();
+          const encoded = (process.env.GOOGLE_SERVICES_JSON_BASE64 || '').trim();
+          let text = raw;
+          if (!text && encoded) text = Buffer.from(encoded, 'base64').toString('utf8');
+          if (!text) throw new Error('Add GOOGLE_SERVICES_JSON or GOOGLE_SERVICES_JSON_BASE64 to repository Actions secrets.');
+          const config = JSON.parse(text);
+          if (config.project_info?.project_id !== 'kakarot-chat') throw new Error('Wrong Firebase project; expected kakarot-chat.');
+          const app = (config.client || []).find(x => x.client_info?.android_client_info?.package_name === 'com.kakarot.chat');
+          if (!app) throw new Error('Firebase Android package com.kakarot.chat was not found.');
+          const oauth = app.oauth_client || [];
+          if (!oauth.some(x => x.client_type === 1)) throw new Error('Android OAuth client missing. Check the app signing SHA fingerprints.');
+          const web = oauth.find(x => x.client_type === 3);
+          if (!web?.client_id) throw new Error('Web OAuth client missing. Re-download google-services.json after Google sign-in setup.');
+          fs.mkdirSync('android/app', { recursive: true });
+          fs.writeFileSync('android/app/google-services.json', JSON.stringify(config));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'web_client_id=' + web.client_id + '\n');
+          console.log('Validated Firebase project, Android package and OAuth clients.');
+          NODE
+
+      - name: Configure Google Services Gradle plugin
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          settings = Path('android/settings.gradle.kts')
+          text = settings.read_text()
+          plugin = '    id("com.google.gms.google-services") version "4.4.4" apply false'
+          if 'com.google.gms.google-services' not in text:
+              text = text.replace('plugins {', 'plugins {\n' + plugin, 1)
+          settings.write_text(text)
+
+          app = Path('android/app/build.gradle.kts')
+          text = app.read_text()
+          app_plugin = '    id("com.google.gms.google-services")'
+          if 'com.google.gms.google-services' not in text:
+              text = text.replace('plugins {', 'plugins {\n' + app_plugin, 1)
+          text = text.replace('applicationId = "com.example.chat"', 'applicationId = "com.kakarot.chat"')
+          app.write_text(text)
+          PY
+          grep -q 'applicationId = "com.kakarot.chat"' android/app/build.gradle.kts
+
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        run: flutter test
+
+      - name: Build debug APK
+        env:
+          GOOGLE_SERVER_CLIENT_ID: ${{ steps.firebase_config.outputs.web_client_id }}
+        run: flutter build apk --debug --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: kakarot-chat-flutter-debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
