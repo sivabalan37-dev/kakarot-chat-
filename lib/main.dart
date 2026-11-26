@@ -10,8 +10,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
+  // firebase_app_check 0.5.x uses provider objects and providerAndroid.
+  // Debug tokens must be registered in Firebase Console for development;
+  // production builds use Play Integrity.
   await FirebaseAppCheck.instance.activate(
-    androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+    providerAndroid: kDebugMode
+        ? const AndroidDebugProvider()
+        : const AndroidPlayIntegrityProvider(),
   );
 
   await GoogleAuthService.instance.initialize();
