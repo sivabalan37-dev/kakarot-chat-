@@ -152,3 +152,94 @@ export const completeProfile = onCall(
     return { success: true };
   },
 );
+
+
+// Backfill the public directory record for accounts created by the legacy app.
+// A missing profiles/{uid} document is not treated as an unknown user if the
+// private users/{uid} record already exists.
+export const ensureLegacyProfile = onCall(
+  { enforceAppCheck: true, maxInstances: 10 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in is required.");
+    await enforceRateLimit(uid, "profile_bootstrap", 10, 60 * 60_000);
+
+    const profileRef = db.collection("profiles").doc(uid);
+    const userRef = db.collection("users").doc(uid);
+    const [profile, legacyUser, account] = await Promise.all([
+      profileRef.get(),
+      userRef.get(),
+      getAuth().getUser(uid),
+    ]);
+    if (profile.exists) return { ready: true };
+    if (!legacyUser.exists) return { ready: false };
+
+    const data = legacyUser.data() ?? {};
+    const email = (account.email ?? data.email ?? "").trim().toLowerCase();
+    const username = typeof data.username === "string" && data.username.trim()
+      ? data.username.trim()
+      : (account.displayName?.trim() || email.split("@")[0] || "");
+    if (!username) return { ready: false };
+
+    const photoURL = account.photoURL ?? data.profile_photo ?? data.photoURL ?? "";
+    const usernameLower = username.toLowerCase();
+    const now = FieldValue.serverTimestamp();
+    await profileRef.set({
+      user_id: uid,
+      username,
+      username_lower: usernameLower,
+      profile_photo: photoURL,
+      email_hash: email ? createHash("sha256").update(email, "utf8").digest("hex") : "",
+      status: "online",
+      last_active_at: now,
+      migrated_at: now,
+    }, { merge: true });
+
+    return { ready: true };
+  },
+);
+
+export const searchUsers = onCall(
+  { enforceAppCheck: true, maxInstances: 10 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in is required.");
+    await enforceRateLimit(uid, "profile_search", 30, 60_000);
+
+    if (typeof request.data?.query !== "string") {
+      throw new HttpsError("invalid-argument", "Enter a username or full email.");
+    }
+    const term = request.data.query.trim().toLowerCase();
+    if (term.length < 2 || term.length > 254) return { users: [] };
+
+    let snapshot;
+    if (term.includes("@")) {
+      const emailHash = createHash("sha256").update(term, "utf8").digest("hex");
+      snapshot = await db.collection("profiles")
+        .where("email_hash", "==", emailHash)
+        .limit(10)
+        .get();
+    } else {
+      snapshot = await db.collection("profiles")
+        .orderBy("username_lower")
+        .startAt(term)
+        .endAt(term + "\\uf8ff")
+        .limit(11)
+        .get();
+    }
+
+    const users = snapshot.docs
+      .filter((doc) => doc.id !== uid)
+      .slice(0, 10)
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          user_id: doc.id,
+          username: typeof data.username === "string" ? data.username : "Kakarot user",
+          profile_photo: typeof data.profile_photo === "string" ? data.profile_photo : "",
+          status: data.status === "online" ? "online" : "offline",
+        };
+      });
+    return { users };
+  },
+);

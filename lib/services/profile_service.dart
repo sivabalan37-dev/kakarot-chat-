@@ -18,6 +18,20 @@ class ProfileService {
     return result.data['available'] == true;
   }
 
+  Future<bool> ensureLegacyProfile() async {
+    final result = await _functions.httpsCallable('ensureLegacyProfile').call<Map<String, dynamic>>({});
+    return result.data['ready'] == true;
+  }
+
+  Future<List<Map<String, dynamic>>> searchUsers(String query) async {
+    final result = await _functions.httpsCallable('searchUsers').call<Map<String, dynamic>>({
+      'query': query.trim(),
+    });
+    final users = result.data['users'];
+    if (users is! List) return [];
+    return users.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+  }
+
   Future<void> completeProfile({
     required String username,
     required String displayName,

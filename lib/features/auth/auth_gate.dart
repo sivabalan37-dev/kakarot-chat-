@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/google_auth_service.dart';
+import '../../services/profile_service.dart';
 import '../home/chat_home_screen.dart';
 import '../onboarding/profile_setup_screen.dart';
 import 'sign_in_screen.dart';
@@ -17,7 +18,10 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   int _profileAttempt = 0;
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _loadProfile(String uid) {
+  Future<DocumentSnapshot<Map<String, dynamic>>> _loadProfile(String uid) async {
+    // Restore legacy web-app profiles for existing Firebase users before
+    // deciding whether onboarding is needed.
+    await ProfileService().ensureLegacyProfile();
     return FirebaseFirestore.instance.collection('profiles').doc(uid).get();
   }
 
