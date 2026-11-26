@@ -8,9 +8,16 @@ class GoogleAuthService {
   final GoogleSignIn _google = GoogleSignIn.instance;
   Future<void>? _ready;
 
-  Future<void> initialize() => _ready ??= _google.initialize(
-        serverClientId: const String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID'),
-      );
+  Future<void> initialize() {
+    return _ready ??= _initializeGoogle();
+  }
+
+  Future<void> _initializeGoogle() async {
+    const serverClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+    await _google.initialize(
+      serverClientId: serverClientId.isEmpty ? null : serverClientId,
+    );
+  }
 
   Future<UserCredential?> signIn() async {
     await initialize();

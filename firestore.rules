@@ -1,24 +1,53 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Anything not matched below is denied by default.
-
     function signedIn() { return request.auth != null; }
     function mine(uid) { return signedIn() && request.auth.uid == uid; }
+    function safeUserData() {
+      return !request.resource.data.keys().hasAny([
+        'password', 'googlePassword', 'idToken', 'accessToken',
+        'refreshToken', 'credential', 'customToken', 'authToken'
+      ]);
+    }
     function chatOf(id) { return get(/databases/$(database)/documents/chats/$(id)).data; }
     function inChat(id) { return signedIn() && request.auth.uid in chatOf(id).participants; }
 
-    // Private account record: only its owner can read or change it.
     match /users/{uid} {
-      allow read, create, update: if mine(uid);
-      match /blocked/{other} { allow read, write: if mine(uid); }
+      allow read: if mine(uid);
+      allow create: if mine(uid)
+        && request.resource.data.user_id == uid
+        && safeUserData();
+      allow update: if mine(uid)
+        && resource.data.user_id == uid
+        && request.resource.data.user_id == uid
+        && safeUserData();
+      allow delete: if false;
+      match /blocked/{other} {
+        allow read, write: if mine(uid);
+      }
     }
 
-    // Public directory (name, photo, presence, hashed email) used for search and chat headers.
-    // Only its owner can write it.
     match /profiles/{uid} {
       allow read: if signedIn();
-      allow create, update: if mine(uid) && request.resource.data.user_id == uid;
+      allow create, update: if mine(uid)
+        && request.resource.data.user_id == uid
+        && !request.resource.data.keys().hasAny([
+          'password', 'googlePassword', 'idToken', 'accessToken',
+          'refreshToken', 'credential', 'customToken', 'email'
+        ]);
+      allow delete: if false;
+    }
+
+    // Reservations and username-to-email mappings are written only by
+    // trusted Admin SDK Cloud Functions. Clients cannot enumerate or mutate them.
+    match /usernames/{usernameLower} {
+      allow read, write: if false;
+    }
+    match /usernameAuth/{usernameLower} {
+      allow read, write: if false;
+    }
+    match /rateLimits/{rateLimitId} {
+      allow read, write: if false;
     }
 
     match /chats/{chatId} {
@@ -50,7 +79,6 @@ service cloud.firestore {
         && request.resource.data.read_at == null
         && request.resource.data.delivered_at == null
         && !exists(/databases/$(database)/documents/users/$(request.resource.data.receiver_id)/blocked/$(request.auth.uid));
-      // Participants may only add themselves to deleted_for; only the receiver sets delivered/read.
       allow update: if inChat(resource.data.chat_id)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['delivered_at', 'read_at', 'deleted_for'])
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['delivered_at', 'read_at'])
