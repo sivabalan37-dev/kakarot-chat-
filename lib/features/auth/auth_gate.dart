@@ -58,7 +58,8 @@ class _AuthGateState extends State<AuthGate> {
                 username is String &&
                 username.trim().isNotEmpty &&
                 usernameLower is String &&
-                usernameLower.trim().isNotEmpty;
+                usernameLower.trim().isNotEmpty &&
+                data?['hasPassword'] == true;
 
             if (profileReady) return const ChatHomeScreen();
             return ProfileSetupScreen(user: user);
