@@ -16,7 +16,8 @@ class KakarotBrand extends StatelessWidget {
               child: Image.asset(
                 'assets/images/kakarot_shiva_logo.jpg',
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported),
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.image_not_supported),
               ),
             ),
           ),
