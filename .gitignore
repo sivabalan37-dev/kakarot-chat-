@@ -1,0 +1,30 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# Android / signing
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# Firebase configuration and secrets
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
