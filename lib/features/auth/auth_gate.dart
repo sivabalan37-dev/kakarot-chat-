@@ -38,7 +38,7 @@ class _AuthGateState extends State<AuthGate> {
         if (user == null) return const SignInScreen();
 
         return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          key: ValueKey<String>('${user.uid}:${_profileAttempt}'),
+          key: ValueKey<String>('${user.uid}:$_profileAttempt'),
           future: _loadProfile(user.uid),
           builder: (context, profileSnapshot) {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
