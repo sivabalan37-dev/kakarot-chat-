@@ -161,7 +161,7 @@ export const completeProfile = onCall(
 // public directory. Only Firebase Auth users that already have a legacy users/{uid}
 // or profiles/{uid} document are migrated; brand-new accounts still complete setup.
 async function backfillLegacyProfiles() {
-  const migrationRef = db.collection("_systemMigrations").doc("profiles_directory_v1");
+  const migrationRef = db.collection("_systemMigrations").doc("profiles_directory_v2");
   const migration = await migrationRef.get();
   if (migration.data()?.completed === true) return;
 
@@ -178,9 +178,11 @@ async function backfillLegacyProfiles() {
           legacyUserRef.get(),
         ]);
 
-        // Do not auto-create profiles for new Google accounts: those users must
-        // choose their own username and link their Kakarot password first.
-        if (!profileSnapshot.exists && !legacyUserSnapshot.exists) return;
+        // Backfill every existing Firebase Auth account, including accounts
+        // created before the app wrote a profiles/{uid} document. Use a
+        // deterministic non-real-name handle until the user completes setup.
+        // This migration never creates or changes Firebase Authentication users.
+        if (!account.email) return;
 
         const profile = profileSnapshot.data() ?? {};
         const legacy = legacyUserSnapshot.data() ?? {};
@@ -237,6 +239,8 @@ async function backfillLegacyProfiles() {
               profile_photo: photoURL,
               email_hash: emailHash,
               status: profile.status === "online" ? "online" : "offline",
+              display_name: account.displayName ?? legacy.displayName ?? "",
+              hasPassword: account.providerData.some((provider) => provider.providerId === "password"),
               last_active_at: profile.last_active_at ?? now,
               migrated_at: now,
             }, { merge: true });
